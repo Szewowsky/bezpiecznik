@@ -8,6 +8,7 @@ UI: http://localhost:7860 (auto-launch)
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 import gradio as gr
@@ -31,7 +32,7 @@ WARNING_BANNER = """
 # Privacy Filter supports cpu / cuda. Na macOS Apple Silicon — tylko CPU.
 DEVICE = os.environ.get("OPF_DEVICE", "cpu")
 MODEL: OPF | None = None  # lazy-loaded on first inference
-TMP_DIR = Path("/tmp/privacy-tool")
+TMP_DIR = Path(tempfile.gettempdir()) / "privacy-tool"
 
 
 def get_model() -> OPF:
@@ -150,6 +151,6 @@ if __name__ == "__main__":
     ui = build_ui()
     ui.launch(
         server_name="127.0.0.1",  # localhost-only (NFR-P7)
-        inbrowser=True,
+        inbrowser=os.environ.get("PRIVACY_TOOL_INBROWSER", "1") == "1",
         show_error=True,
     )
