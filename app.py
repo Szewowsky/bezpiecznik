@@ -19,6 +19,8 @@ except ImportError:
         "❌ Brak pakietu 'opf'. Zainstaluj: pip install -r requirements.txt"
     )
 
+from pii_regex import apply_redaction, find_pii, merge_with_opf_spans
+
 
 WARNING_BANNER = """
 > ⚠️ **Output wymaga human review.** Privacy Filter to *data minimization aid*,
@@ -61,27 +63,38 @@ def redact(text: str, file_path: str | None) -> tuple[str, dict, str | None]:
     result = model.redact(text)
     data = result.to_dict()
 
-    # Build human-friendly summary
+    # Hybrid: merge OPF spans z regex-based PL detection (IBAN, NIP, PESEL)
+    regex_spans = find_pii(text)
+    merged_spans = merge_with_opf_spans(data["detected_spans"], regex_spans)
+    final_redacted = apply_redaction(text, merged_spans)
+
+    # Recompute by_label dla merged spans
+    by_label: dict[str, int] = {}
+    for s in merged_spans:
+        by_label[s["label"]] = by_label.get(s["label"], 0) + 1
+
     summary = {
-        "by_label": data["summary"]["by_label"],
-        "span_count": data["summary"]["span_count"],
+        "by_label": by_label,
+        "span_count": len(merged_spans),
+        "regex_added": len(regex_spans),
         "detected_spans": [
             {
                 "label": s["label"],
                 "text": s["text"],
                 "placeholder": s["placeholder"],
+                "source": s.get("source", "opf"),
                 "position": f"{s['start']}-{s['end']}",
             }
-            for s in data["detected_spans"]
+            for s in merged_spans
         ],
     }
 
     # Save redacted output to temp file for download (no body logging — NFR-P3)
     TMP_DIR.mkdir(exist_ok=True)
     out_path = TMP_DIR / "redacted.md"
-    out_path.write_text(data["redacted_text"], encoding="utf-8")
+    out_path.write_text(final_redacted, encoding="utf-8")
 
-    return (data["redacted_text"], summary, str(out_path))
+    return (final_redacted, summary, str(out_path))
 
 
 def build_ui() -> gr.Blocks:
