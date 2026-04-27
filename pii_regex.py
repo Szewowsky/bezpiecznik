@@ -27,30 +27,30 @@ class RegexSpan:
 
 # IBAN PL — opcjonalnie z prefix "PL", 2 cyfry kontrolne + 24 cyfry numeru konta,
 # często grupowane w bloki po 4 ze spacjami.
-# Przykłady które matchują:
-#   PL12 1140 2004 0000 3502 1234 5678
-#   12 1140 2004 0000 3502 1234 5678
-#   12114020040000350212345678
 IBAN_PL = re.compile(
     r"\b(?:PL\s?)?(\d{2}(?:[\s-]?\d{4}){5}[\s-]?\d{4})\b",
     re.IGNORECASE,
 )
 
-# NIP — 10 cyfr, wymaga kontekstu (słowo "NIP" do 5 znaków przed).
-# Format: 1234567890 lub 123-456-78-90 lub 123-45-67-890.
+# NIP — wymaga kontekstu (słowo "NIP" do 20 znaków przed liczbą, żeby objąć
+# polskie frazy: "NIP: X", "NIP X", "Mój nip to X", "NIP firmy wynosi X").
+# Liberalnie łapie ciąg cyfr/separatorów po słowie kluczowym (8-15 znaków),
+# potem walidacja digit-count (8-11 cyfr — poprawny NIP = 10, tolerancja typos).
 NIP_WITH_CONTEXT = re.compile(
-    r"\bNIP[:\s]{1,5}((?:PL\s?)?\d{3}[-\s]?\d{2,3}[-\s]?\d{2,3}[-\s]?\d{2,3})\b",
+    r"\bNIP[\w\s:.,/-]{1,20}?((?:PL\s?)?[\d][\d\s-]{6,14}[\d])\b",
     re.IGNORECASE,
 )
 
-# PESEL — 11 cyfr, wymaga kontekstu "PESEL" (do 30 znaków przed, żeby objąć
-# typowe polskie frazy: "PESEL do faktury:", "PESEL klienta to:", etc).
-# Standalone 11-cyfrowy match jest niebezpieczny (false positives: telefony,
-# identyfikatory), więc bez kontekstu nie łapiemy.
+# PESEL — wymaga kontekstu "PESEL" (do 30 znaków przed, np. "PESEL do faktury:").
+# Tolerancja typos: 8-12 cyfr (poprawny PESEL ma 11).
 PESEL_WITH_CONTEXT = re.compile(
-    r"\bPESEL[\w\s:.,/-]{1,30}?(\d{11})\b",
+    r"\bPESEL[\w\s:.,/-]{1,30}?(\d{8,12})\b",
     re.IGNORECASE,
 )
+
+# Polski kod pocztowy — XX-XXX. Powszechnie występuje w adresach.
+# Bezpieczny bez kontekstu (rare false-match w innych liczbach).
+POSTAL_CODE_PL = re.compile(r"\b(\d{2}-\d{3})\b")
 
 
 def find_pii(text: str) -> list[RegexSpan]:
@@ -69,39 +69,56 @@ def find_pii(text: str) -> list[RegexSpan]:
             continue
         spans.append(
             RegexSpan(
-                label="private_account_number",
+                label="iban",
                 start=match.start(1),
                 end=match.end(1),
                 text=match.group(1),
-                placeholder="<PRIVATE_ACCOUNT_NUMBER>",
+                placeholder="<IBAN>",
                 source="regex:iban_pl",
             )
         )
 
     for match in NIP_WITH_CONTEXT.finditer(text):
         digits_only = re.sub(r"\D", "", match.group(1).replace("PL", ""))
-        if len(digits_only) != 10:
+        # Tolerancja typos: 8-11 cyfr (poprawny NIP = 10)
+        if not (8 <= len(digits_only) <= 11):
             continue
         spans.append(
             RegexSpan(
-                label="private_account_number",
+                label="nip",
                 start=match.start(1),
                 end=match.end(1),
                 text=match.group(1),
-                placeholder="<PRIVATE_ACCOUNT_NUMBER>",
+                placeholder="<NIP>",
                 source="regex:nip_pl",
             )
         )
 
     for match in PESEL_WITH_CONTEXT.finditer(text):
+        # Pattern już ogranicza do 8-12 cyfr; dodatkowo waliduj
+        digits_only = match.group(1)
+        if not (8 <= len(digits_only) <= 12):
+            continue
         spans.append(
             RegexSpan(
-                label="private_account_number",
+                label="pesel",
                 start=match.start(1),
                 end=match.end(1),
                 text=match.group(1),
-                placeholder="<PRIVATE_ACCOUNT_NUMBER>",
+                placeholder="<PESEL>",
                 source="regex:pesel_pl",
+            )
+        )
+
+    for match in POSTAL_CODE_PL.finditer(text):
+        spans.append(
+            RegexSpan(
+                label="postal_code",
+                start=match.start(1),
+                end=match.end(1),
+                text=match.group(1),
+                placeholder="<KOD_POCZTOWY>",
+                source="regex:postal_pl",
             )
         )
 
@@ -163,11 +180,14 @@ if __name__ == "__main__":
     # Quick self-test
     sample = """
     NIP 5252839110, drugi: NIP: 952-345-67-90.
+    NIP z typo: 883951111
     Konto: 12 1140 2004 0000 3502 1234 5678
     PESEL do faktury: 90123456789
+    PESEL z typo: 11111111
     Inny IBAN: PL61 1090 1014 0000 0712 1981 2874
+    Adres: Chichy 79, 67-320 Chichy
     """
     found = find_pii(sample)
     print(f"Found {len(found)} regex matches:")
     for span in found:
-        print(f"  [{span.label}] {span.text!r} (source={span.source})")
+        print(f"  [{span.label:14}] {span.text!r:50} → {span.placeholder} (source={span.source})")

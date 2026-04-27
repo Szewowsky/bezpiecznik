@@ -54,8 +54,8 @@ class TestIbanPositive:
         text = "Konto: 12 1140 2004 0000 3502 1234 5678"
         spans = find_pii(text)
         iban = next(s for s in spans if s.source == "regex:iban_pl")
-        assert iban.label == "private_account_number"
-        assert iban.placeholder == "<PRIVATE_ACCOUNT_NUMBER>"
+        assert iban.label == "iban"
+        assert iban.placeholder == "<IBAN>"
 
     def test_iban_digit_count_heuristic_rejects_25_digit_match(self):
         # 25 digits total — should be rejected by the len != 26 guard
@@ -93,14 +93,23 @@ class TestNipPositive:
         text = "NIP 5252839110"
         spans = find_pii(text)
         nip = next(s for s in spans if s.source == "regex:nip_pl")
-        assert nip.label == "private_account_number"
-        assert nip.placeholder == "<PRIVATE_ACCOUNT_NUMBER>"
+        assert nip.label == "nip"
+        assert nip.placeholder == "<NIP>"
 
     def test_nip_colon_separator(self):
         text = "Numer NIP: 952-345-67-90"
         spans = find_pii(text)
         nip_spans = [s for s in spans if s.source == "regex:nip_pl"]
         assert len(nip_spans) == 1
+
+    def test_nip_typo_9_digits(self):
+        # Typo case: 9 digits after "NIP" keyword — within 8-11 tolerance
+        text = "NIP 883951111"
+        spans = find_pii(text)
+        nip_spans = [s for s in spans if s.source == "regex:nip_pl"]
+        assert len(nip_spans) == 1, f"Expected 1 NIP span for 9-digit typo, got {len(nip_spans)}"
+        assert nip_spans[0].label == "nip"
+        assert nip_spans[0].placeholder == "<NIP>"
 
 
 # ---------------------------------------------------------------------------
@@ -133,8 +142,17 @@ class TestPeselPositive:
         text = "PESEL 90123456789"
         spans = find_pii(text)
         pesel = next(s for s in spans if s.source == "regex:pesel_pl")
-        assert pesel.label == "private_account_number"
-        assert pesel.placeholder == "<PRIVATE_ACCOUNT_NUMBER>"
+        assert pesel.label == "pesel"
+        assert pesel.placeholder == "<PESEL>"
+
+    def test_pesel_typo_8_digits(self):
+        # Typo case: 8 digits after "PESEL" keyword — within 8-12 tolerance
+        text = "PESEL z typo: 11111111"
+        spans = find_pii(text)
+        pesel_spans = [s for s in spans if s.source == "regex:pesel_pl"]
+        assert len(pesel_spans) == 1, f"Expected 1 PESEL span for 8-digit typo, got {len(pesel_spans)}"
+        assert pesel_spans[0].label == "pesel"
+        assert pesel_spans[0].placeholder == "<PESEL>"
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +200,72 @@ class TestNegativeCases:
         spans = find_pii(text)
         pesel_spans = [s for s in spans if s.source == "regex:pesel_pl"]
         assert len(pesel_spans) == 0
+
+
+# ---------------------------------------------------------------------------
+# Postal code PL — positive cases
+# ---------------------------------------------------------------------------
+
+class TestPostalCodePositive:
+    def test_postal_code_67_320(self):
+        text = "Chichy 79, 67-320 Chichy"
+        spans = find_pii(text)
+        postal_spans = [s for s in spans if s.source == "regex:postal_pl"]
+        assert len(postal_spans) == 1, f"Expected 1 postal span, got {len(postal_spans)}"
+        assert postal_spans[0].text == "67-320"
+        assert postal_spans[0].label == "postal_code"
+        assert postal_spans[0].placeholder == "<KOD_POCZTOWY>"
+
+    def test_postal_code_00_001(self):
+        text = "Adres: ul. Warszawska 1, 00-001 Warszawa"
+        spans = find_pii(text)
+        postal_spans = [s for s in spans if s.source == "regex:postal_pl"]
+        assert len(postal_spans) == 1
+        assert postal_spans[0].text == "00-001"
+
+    def test_postal_code_02_987(self):
+        text = "Kod pocztowy to 02-987"
+        spans = find_pii(text)
+        postal_spans = [s for s in spans if s.source == "regex:postal_pl"]
+        assert len(postal_spans) == 1
+        assert postal_spans[0].text == "02-987"
+        assert postal_spans[0].label == "postal_code"
+        assert postal_spans[0].placeholder == "<KOD_POCZTOWY>"
+
+    def test_postal_code_standalone_without_context(self):
+        # No context word required — postal code regex is context-free
+        text = "67-320"
+        spans = find_pii(text)
+        postal_spans = [s for s in spans if s.source == "regex:postal_pl"]
+        assert len(postal_spans) == 1
+        assert postal_spans[0].text == "67-320"
+
+
+# ---------------------------------------------------------------------------
+# Postal code PL — negative cases (must NOT match)
+# ---------------------------------------------------------------------------
+
+class TestPostalCodeNegative:
+    def test_too_long_first_group_1234_567(self):
+        # 4 digits before hyphen — does not match \d{2}-\d{3}
+        text = "Numer 1234-567 w systemie"
+        spans = find_pii(text)
+        postal_spans = [s for s in spans if s.source == "regex:postal_pl"]
+        assert len(postal_spans) == 0, "1234-567 must NOT match postal code (first group too long)"
+
+    def test_too_short_first_group_1_234(self):
+        # 1 digit before hyphen — does not match \d{2}-\d{3}
+        text = "Wartosc 1-234 w tekscie"
+        spans = find_pii(text)
+        postal_spans = [s for s in spans if s.source == "regex:postal_pl"]
+        assert len(postal_spans) == 0, "1-234 must NOT match postal code (first group too short)"
+
+    def test_too_short_second_group_12_34(self):
+        # 2 digits after hyphen — does not match \d{2}-\d{3}
+        text = "Kod 12-34 nieprawidlowy"
+        spans = find_pii(text)
+        postal_spans = [s for s in spans if s.source == "regex:postal_pl"]
+        assert len(postal_spans) == 0, "12-34 must NOT match postal code (second group too short)"
 
 
 # ---------------------------------------------------------------------------
@@ -312,4 +396,5 @@ class TestApplyRedaction:
         result = apply_redaction(text, span_dicts)
         assert "5252839110" not in result
         assert "1140 2004 0000 3502 1234 5678" not in result
-        assert "<PRIVATE_ACCOUNT_NUMBER>" in result
+        assert "<NIP>" in result
+        assert "<IBAN>" in result
