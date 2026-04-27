@@ -144,10 +144,14 @@ def build_ui() -> gr.Blocks:
 
         gr.Markdown(
             "---\n"
-            "**Kategorie:** `PRIVATE_PERSON` · `PRIVATE_EMAIL` · `PRIVATE_PHONE` · "
-            "`PRIVATE_ADDRESS` · `PRIVATE_ACCOUNT_NUMBER` · `PRIVATE_URL` · "
-            "`PRIVATE_DATE` · `PRIVATE_SECRET`. "
-            "**Bez kategorii** `ORGANIZATION` — nazwy firm mogą być over-redacted jako PERSON."
+            "**🔧 Regex layer (deterministic, PL):** "
+            "`<IBAN>` · `<NIP>` · `<PESEL>` · `<KOD_POCZTOWY>`\n\n"
+            "**🤖 OPF model (kontekstowe):** "
+            "`<PRIVATE_PERSON>` · `<PRIVATE_EMAIL>` · `<PRIVATE_PHONE>` · "
+            "`<PRIVATE_ADDRESS>` · `<PRIVATE_URL>` · `<PRIVATE_DATE>` · `<SECRET>`\n\n"
+            "**Brak kategorii `ORGANIZATION`** — nazwy firm mogą być over-redacted jako PERSON. "
+            "Filtr false-positive: spany PERSON zawierające `nip`/`pesel`/`iban`/`konto` "
+            "są pomijane (regex łapie cyfry)."
         )
 
     return ui
