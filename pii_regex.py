@@ -126,6 +126,37 @@ def find_pii(text: str) -> list[RegexSpan]:
     return spans
 
 
+# Słowa-klucze PII które OPF błędnie klasyfikuje jako PERSON
+# (np. "Mój nip" → PRIVATE_PERSON). Gdy span PERSON zawiera któreś
+# z tych słów, span jest filtrowany — to nie imię, to kontekst PII.
+PII_KEYWORDS_IN_PERSON = ("nip", "pesel", "iban", "konto", "regon", "krs")
+
+
+def filter_false_person_spans(opf_spans: list[dict]) -> list[dict]:
+    """
+    Usuwa OPF spany typu `private_person` które zawierają słowa-klucze
+    PII (NIP, PESEL, etc) — to nie imiona, to kontekst PII.
+
+    Comparison case-insensitive na word boundaries (żeby "iban" w "Iban Kowalski"
+    było traktowane różnie niż "iban" w "Mój iban to ...").
+
+    Bezpieczeństwo: po filtrze regex layer wciąż łapie cyfry —
+    PII nie wycieka, tracimy tylko nadmiarową redakcję kontekstu.
+    """
+    filtered = []
+    for span in opf_spans:
+        if span.get("label") == "private_person":
+            text_lower = span.get("text", "").lower()
+            # Sprawdź czy słowo-klucz pojawia się jako pełne słowo (word boundary)
+            has_keyword = any(
+                re.search(rf"\b{kw}\b", text_lower) for kw in PII_KEYWORDS_IN_PERSON
+            )
+            if has_keyword:
+                continue  # skip — to nie osoba
+        filtered.append(span)
+    return filtered
+
+
 def merge_with_opf_spans(opf_spans: list[dict], regex_spans: list[RegexSpan]) -> list[dict]:
     """
     Połącz spany z OPF z regex'em. Deduplikuje overlap (regex wygrywa

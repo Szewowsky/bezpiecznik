@@ -13,7 +13,12 @@ from pathlib import Path
 
 from opf import OPF
 
-from pii_regex import apply_redaction, find_pii, merge_with_opf_spans
+from pii_regex import (
+    apply_redaction,
+    filter_false_person_spans,
+    find_pii,
+    merge_with_opf_spans,
+)
 
 
 def main():
@@ -35,7 +40,7 @@ def main():
 
         # OPF
         opf_result = model.redact(text).to_dict()
-        opf_spans = opf_result["detected_spans"]
+        opf_spans = filter_false_person_spans(opf_result["detected_spans"])
 
         # Regex layer (PL strukturalne PII)
         regex_spans = find_pii(text)

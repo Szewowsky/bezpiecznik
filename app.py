@@ -20,7 +20,12 @@ except ImportError:
         "❌ Brak pakietu 'opf'. Zainstaluj: pip install -r requirements.txt"
     )
 
-from pii_regex import apply_redaction, find_pii, merge_with_opf_spans
+from pii_regex import (
+    apply_redaction,
+    filter_false_person_spans,
+    find_pii,
+    merge_with_opf_spans,
+)
 
 
 WARNING_BANNER = """
@@ -64,9 +69,11 @@ def redact(text: str, file_path: str | None) -> tuple[str, dict, str | None]:
     result = model.redact(text)
     data = result.to_dict()
 
-    # Hybrid: merge OPF spans z regex-based PL detection (IBAN, NIP, PESEL)
+    # Hybrid: filter OPF false-positives (PERSON ze słowami PII), potem
+    # merge z regex-based PL detection (IBAN, NIP, PESEL, kod pocztowy)
+    opf_spans = filter_false_person_spans(data["detected_spans"])
     regex_spans = find_pii(text)
-    merged_spans = merge_with_opf_spans(data["detected_spans"], regex_spans)
+    merged_spans = merge_with_opf_spans(opf_spans, regex_spans)
     final_redacted = apply_redaction(text, merged_spans)
 
     # Recompute by_label dla merged spans

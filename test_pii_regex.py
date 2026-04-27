@@ -9,7 +9,7 @@ Covers:
 """
 
 import pytest
-from pii_regex import find_pii, merge_with_opf_spans, apply_redaction, RegexSpan
+from pii_regex import find_pii, merge_with_opf_spans, apply_redaction, filter_false_person_spans, RegexSpan
 
 
 # ---------------------------------------------------------------------------
@@ -398,3 +398,121 @@ class TestApplyRedaction:
         assert "1140 2004 0000 3502 1234 5678" not in result
         assert "<NIP>" in result
         assert "<IBAN>" in result
+
+
+# ---------------------------------------------------------------------------
+# filter_false_person_spans() — removes PERSON spans that contain PII keywords
+# ---------------------------------------------------------------------------
+
+def _person_span(text):
+    """Helper: build a minimal OPF-style private_person span dict."""
+    return {"label": "private_person", "start": 0, "end": len(text), "text": text, "placeholder": "<PRIVATE_PERSON>"}
+
+
+def _other_span(label, text):
+    """Helper: build a span with a non-person label."""
+    return {"label": label, "start": 0, "end": len(text), "text": text, "placeholder": f"<{label.upper()}>"}
+
+
+class TestFilterFalsePersonSpans:
+    # --- Positive cases: filter REMOVES the span ---
+
+    def test_person_span_with_nip_is_filtered(self):
+        spans = [_person_span("Mój nip")]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 0, "PERSON span containing 'nip' must be filtered"
+
+    def test_person_span_with_pesel_is_filtered(self):
+        spans = [_person_span("PESEL klient")]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 0, "PERSON span containing 'pesel' must be filtered"
+
+    def test_person_span_with_pesel_mid_phrase_is_filtered(self):
+        spans = [_person_span("Pisał Adam, PESEL ...")]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 0, "PERSON span with 'pesel' as a word must be filtered"
+
+    def test_person_span_with_iban_is_filtered(self):
+        spans = [_person_span("iban firmy")]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 0, "PERSON span containing 'iban' must be filtered"
+
+    def test_person_span_with_konto_is_filtered(self):
+        spans = [_person_span("Konto klienta")]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 0, "PERSON span containing 'konto' must be filtered"
+
+    def test_person_span_with_regon_is_filtered(self):
+        spans = [_person_span("REGON spółki")]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 0, "PERSON span containing 'regon' must be filtered"
+
+    def test_person_span_case_insensitive_nip_upper(self):
+        # NIP fully uppercased — must still be caught
+        spans = [_person_span("MÓJ NIP TO")]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 0, "Filter must work case-insensitively (NIP uppercase)"
+
+    # --- Negative cases: filter KEEPS the span ---
+
+    def test_person_span_without_keyword_is_kept(self):
+        spans = [_person_span("Robert Szewczyk")]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 1, "PERSON span 'Robert Szewczyk' must NOT be filtered"
+
+    def test_person_span_anna_nowak_is_kept(self):
+        spans = [_person_span("Anna Nowak")]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 1, "PERSON span 'Anna Nowak' must NOT be filtered"
+
+    def test_email_span_with_iban_substring_is_kept(self):
+        # label is NOT private_person → must never be filtered regardless of text
+        spans = [_other_span("email_address", "iban@example.com")]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 1, "Non-private_person span must be kept even if text contains keyword"
+
+    def test_account_number_span_is_kept(self):
+        spans = [_other_span("private_account_number", "12345")]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 1, "ACCOUNT_NUMBER span must always be kept"
+
+    def test_person_span_knipowski_kept_word_boundary(self):
+        # 'nip' appears inside 'Knipowski' — NOT a word boundary match, so span must be kept
+        spans = [_person_span("Knipowski")]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 1, "'nip' inside 'Knipowski' must NOT trigger filter (word-boundary rule)"
+
+    def test_person_span_pesel_knur_is_filtered_known_tradeoff(self):
+        # 'pesel' as a standalone word IS a word-boundary match even though Knur is a real surname.
+        # Accepted trade-off: very rare false-positive vs. over-redaction risk.
+        spans = [_person_span("Pesel Knur")]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 0, "'pesel' at word boundary in 'Pesel Knur' triggers filter (known trade-off)"
+
+    # --- Multiple spans ---
+
+    def test_mixed_list_only_person_with_keyword_removed(self):
+        spans = [
+            _person_span("Mój nip"),          # should be filtered
+            _other_span("email_address", "jan@example.com"),  # kept
+            _other_span("email_address", "anna@example.com"),  # kept
+        ]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 2, "Only the PERSON span with keyword should be removed"
+        labels = [s["label"] for s in result]
+        assert "private_person" not in labels
+
+    def test_five_spans_two_keywords_filtered(self):
+        spans = [
+            _person_span("Robert Szewczyk"),   # kept — no keyword
+            _person_span("Mój nip"),            # filtered
+            _person_span("PESEL klienta"),      # filtered
+            _other_span("email_address", "x@y.com"),   # kept
+            _other_span("postal_code", "00-001"),      # kept
+        ]
+        result = filter_false_person_spans(spans)
+        assert len(result) == 3, "Only 2 PERSON spans with keywords should be removed"
+
+    def test_empty_list_returns_empty(self):
+        result = filter_false_person_spans([])
+        assert result == [], "Empty input must return empty list"
