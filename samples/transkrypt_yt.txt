@@ -1,0 +1,8 @@
+[00:00] Cześć, tu Robert Szewczyk, witam was w kolejnym odcinku.
+[00:15] Dzisiaj porozmawiamy o automatyzacji marketingu z AI.
+[00:30] Linki do narzędzi macie w opisie pod filmem, plus link.creatorhub.pl/skrot do mojego newslettera.
+[00:45] Jeśli chcecie się kontaktować, piszcie na robert@creatorhub.pl lub przez LinkedIn.
+[01:00] W komentarzach pod ostatnim filmem Anna Nowak zadała świetne pytanie o GDPR.
+[01:15] Anna pisała że pracuje w firmie ActionMedia w Krakowie, ulica Floriańska 5.
+[01:30] Jej wątpliwości to czy używać Claude API do danych klientów. Mój telefon do konsultacji: 600 999 888.
+[01:45] OK, do roboty. Zaczynamy.

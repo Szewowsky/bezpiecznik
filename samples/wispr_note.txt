@@ -1,0 +1,7 @@
+Dzisiaj rano gadałem z Tomkiem Wiśniewskim z firmy Codepoint, mówi że potrzebuje workflow do scrapowania konkurencji. Jego email to t.wisniewski@codepoint.pl, telefon 502 333 444.
+
+Pomysł: zrobić im audyt na podstawie ich strony codepoint.pl/audyt. Stawka 5000 PLN netto, faktura na ich NIP 9512345670.
+
+W piątek 15 maja mam call o 14:00, dodać do kalendarza. Adres ich biura: Aleje Jerozolimskie 100, 00-807 Warszawa.
+
+API key do ich Stripe (z testowej konfiguracji który mi pokazał na ekranie): sk_test_4eC39HqLyjWDarjtT1zdp7dc - przypomnieć żeby zrotował zanim poślą do produkcji.

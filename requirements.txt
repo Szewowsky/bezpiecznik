@@ -1,0 +1,18 @@
+# Privacy Tool — pinned dependencies
+# Install: pip install -r requirements.txt
+#
+# NOTE: opf SHA pin TBD — wpisać po weryfikacji najnowszego stable commit z openai/privacy-filter
+# Po pierwszym install: pip freeze | grep opf
+
+# OpenAI Privacy Filter (Apache 2.0)
+# Install via: pip install git+https://github.com/openai/privacy-filter.git
+git+https://github.com/openai/privacy-filter.git
+
+# UI framework — Gradio 4.x (pin major to avoid breaking changes)
+gradio>=4.0,<5.0
+
+# PyTorch — CPU build OK dla MVP, MPS opt-in
+torch>=2.0,<3.0
+
+# Tokenization (typowo wymagane przez Privacy Filter)
+transformers>=4.40,<5.0

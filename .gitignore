@@ -1,0 +1,30 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Model weights & cache (download separately)
+*.safetensors
+*.bin
+*.pt
+*.pth
+.opf/
+~/.opf/
+
+# Real-data samples (keep folder, ignore real PII)
+samples/private_*
+samples/real_*
+samples/*_redacted.*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local secrets
+.env
+.env.local
