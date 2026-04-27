@@ -1,5 +1,7 @@
 """
-Privacy Tool — lokalny PII redactor (Gradio + OpenAI Privacy Filter).
+Privacy Tool — Gradio legacy UI (port 7860).
+
+Dla nowego UI (Bezpiecznik, port 8000): uvicorn server:app --host 127.0.0.1 --port 8000
 
 Run: python app.py
 UI: http://localhost:7860 (auto-launch)
@@ -13,19 +15,7 @@ from pathlib import Path
 
 import gradio as gr
 
-try:
-    from opf import OPF
-except ImportError:
-    raise SystemExit(
-        "❌ Brak pakietu 'opf'. Zainstaluj: pip install -r requirements.txt"
-    )
-
-from pii_regex import (
-    apply_redaction,
-    filter_false_person_spans,
-    find_pii,
-    merge_with_opf_spans,
-)
+from pii_service import redact_text
 
 
 WARNING_BANNER = """
@@ -34,25 +24,12 @@ WARNING_BANNER = """
 > Sprawdź każdy redacted span przed wysłaniem do external LLM API.
 """
 
-# Privacy Filter supports cpu / cuda. Na macOS Apple Silicon — tylko CPU.
-DEVICE = os.environ.get("OPF_DEVICE", "cpu")
-MODEL: OPF | None = None  # lazy-loaded on first inference
 TMP_DIR = Path(tempfile.gettempdir()) / "privacy-tool"
-
-
-def get_model() -> OPF:
-    """Lazy load model on first inference (faster startup)."""
-    global MODEL
-    if MODEL is None:
-        print(f"⏳ Loading Privacy Filter on {DEVICE.upper()} (first run downloads ~3 GB)...")
-        MODEL = OPF(device=DEVICE, output_mode="typed")
-        print("✅ Model loaded.")
-    return MODEL
 
 
 def redact(text: str, file_path: str | None) -> tuple[str, dict, str | None]:
     """
-    Main redaction handler.
+    Gradio handler — wraps wspólny pii_service.redact_text() w format Gradio outputs.
 
     Returns:
         (redacted_text, summary_dict, download_path)
@@ -65,35 +42,27 @@ def redact(text: str, file_path: str | None) -> tuple[str, dict, str | None]:
     if not text:
         return ("⚠️ Wklej tekst lub przeciągnij plik.", {}, None)
 
-    model = get_model()
-    result = model.redact(text)
-    data = result.to_dict()
+    result = redact_text(text)
+    detections = result["detections"]
+    final_redacted = result["redacted_text"]
 
-    # Hybrid: filter OPF false-positives (PERSON ze słowami PII), potem
-    # merge z regex-based PL detection (IBAN, NIP, PESEL, kod pocztowy)
-    opf_spans = filter_false_person_spans(data["detected_spans"])
-    regex_spans = find_pii(text)
-    merged_spans = merge_with_opf_spans(opf_spans, regex_spans)
-    final_redacted = apply_redaction(text, merged_spans)
-
-    # Recompute by_label dla merged spans
+    # Recompute by_label dla detections (z polskimi etykietami)
     by_label: dict[str, int] = {}
-    for s in merged_spans:
-        by_label[s["label"]] = by_label.get(s["label"], 0) + 1
+    for d in detections:
+        by_label[d["label"]] = by_label.get(d["label"], 0) + 1
 
     summary = {
         "by_label": by_label,
-        "span_count": len(merged_spans),
-        "regex_added": len(regex_spans),
+        "span_count": len(detections),
         "detected_spans": [
             {
-                "label": s["label"],
-                "text": s["text"],
-                "placeholder": s["placeholder"],
-                "source": s.get("source", "opf"),
-                "position": f"{s['start']}-{s['end']}",
+                "label": d["label"],
+                "text": d["text"],
+                "placeholder": d["placeholder"],
+                "source": d["source"],
+                "position": f"{d['start']}-{d['end']}",
             }
-            for s in merged_spans
+            for d in detections
         ],
     }
 
@@ -158,7 +127,8 @@ def build_ui() -> gr.Blocks:
 
 
 if __name__ == "__main__":
-    print(f"🚀 Privacy Tool starting (device={DEVICE})")
+    print(f"🚀 Privacy Tool (Gradio legacy) starting on port 7860")
+    print(f"   Dla nowego UI (Bezpiecznik): uvicorn server:app --port 8000")
     ui = build_ui()
     ui.launch(
         server_name="127.0.0.1",  # localhost-only (NFR-P7)

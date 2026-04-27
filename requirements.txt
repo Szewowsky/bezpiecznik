@@ -20,3 +20,11 @@ torch>=2.0,<3.0
 
 # Tokenization (typowo wymagane przez Privacy Filter)
 transformers>=4.40,<5.0
+
+# Bezpiecznik (nowy UI) — FastAPI backend + uvicorn server
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.27,<1.0
+
+# Tests — TestClient (FastAPI) + pytest
+pytest>=8.0
+httpx>=0.27  # required by fastapi.testclient

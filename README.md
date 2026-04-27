@@ -1,12 +1,14 @@
-# Privacy Tool
+# Privacy Tool / Bezpiecznik
 
 Lokalna apka desktop do wykrywania i maskowania PII (dane osobowe) w tekstach. Drag-and-drop pliku lub paste tekst → masked output. **Wszystko lokalnie. Zero chmury.**
 
 **Hybrid detection:**
 - 🤖 [OpenAI Privacy Filter](https://github.com/openai/privacy-filter) — kontekstowe PII (PERSON, EMAIL, PHONE, ADDRESS, SECRET)
-- 🔧 Regex layer dla polskich strukturalnych identyfikatorów (IBAN PL, NIP, PESEL)
+- 🔧 Regex layer dla polskich strukturalnych identyfikatorów (IBAN PL, NIP, PESEL, kod pocztowy)
 
-UI: [Gradio 5.x](https://gradio.app) (single-process, ~120 linii Pythona).
+**Dwa frontendy:**
+- **Bezpiecznik** (nowy) — FastAPI + React/CSS, port 8000, 3 motywy (Minimal Dark / Terminal / Light), polskie etykiety
+- **Gradio legacy** — port 7860, prosty drag-drop + JSON output
 
 > ⚠️ **Output wymaga human review.** Narzędzie to *data minimization aid*, nie compliance certification. RODO wciąż wymaga DPA dla US-vendors.
 
@@ -30,11 +32,16 @@ source .venv/bin/activate
 # 2. Install
 pip install -r requirements.txt
 
-# 3. Pierwszy run (model ~3 GB pobierze się automatycznie do ~/.opf/)
+# 3a. Bezpiecznik (nowy UI, polecane)
+uvicorn server:app --host 127.0.0.1 --port 8000
+# → http://localhost:8000
+
+# 3b. Gradio legacy
 python app.py
+# → http://localhost:7860 (auto-launch)
 ```
 
-Apka odpali się na `http://localhost:7860` (auto-launch w przeglądarce). Przy pierwszym `redact` model wczyta się ~50s (CPU).
+Pierwszy `redact` ładuje model OPF ~50s (CPU, 3 GB pobiera się przy pierwszym uruchomieniu do `~/.opf/`). Kolejne wywołania są natychmiastowe.
 
 ## Wymagania
 
@@ -104,14 +111,39 @@ TBD (start private). Privacy Filter sam jest Apache 2.0.
 
 ## Status
 
-**Phase 1 — Setup + smoke + UI launch test:** ✅ DONE (2026-04-27)
+- **Phase 1** ✅ DONE (2026-04-27 rano) — Setup + Gradio MVP + 55/55 testów
+- **Phase 1.5** ✅ DONE (2026-04-27 wieczorem) — Bezpiecznik UI (FastAPI + React, 3 motywy, polskie etykiety)
 
 PRD: [`Content Rob/materiały/PRDs/2026-04-27_privacy-tool-prd.md`](../Content%20Rob/materia%C5%82y/PRDs/2026-04-27_privacy-tool-prd.md)
 
 ### Phase 2 (planned)
 
+- ORG detection (spaCy `pl_core_news_lg` lub LLM tagger) — nazwy firm bez suffix
 - macOS Quick Action via CLI (right-click w Finderze)
+- Hosted version dla uczestników kursów (osobny PRD)
 - Polish finetune (jeśli recall realnie boli — lazy approach)
 - Operating point preset (recall vs precision slider)
-- Side-by-side preview (original vs redacted)
-- Hosted version dla uczestników kursów (osobny PRD)
+- Bundle Vite (zamiast Babel-in-browser CDN) — gdy dev reload za wolny
+
+## Architektura (Phase 1.5)
+
+```
+privacy-tool/
+├── server.py           FastAPI: static + /api/redact, port 8000
+├── app.py              Gradio legacy, port 7860
+├── pii_service.py      Wspólny pipeline (redact_text), używany przez oba serwery
+├── opf_runtime.py      Singleton OPF loader
+├── pii_regex.py        Regex PL (IBAN, NIP, PESEL, kod pocztowy)
+├── test_pii_regex.py   55 testów (regex layer)
+├── test_server.py      6 testów (API contract, FastAPI TestClient)
+└── web/                Frontend Bezpiecznik
+    ├── index.html      = Bezpiecznik.html alias
+    ├── styles.css      3 motywy (minimal-dark / terminal / light)
+    ├── app.jsx         Root komponent, fetch /api/redact
+    ├── editor.jsx      Input + Output panel
+    ├── detection-panel.jsx  Boczny panel z grupami detekcji
+    ├── data.jsx        SAMPLES + LABEL_META
+    └── tweaks-panel.jsx     Floating tweaks UI (Claude Design protocol)
+```
+
+API: `POST /api/redact` `{text}` → `{detections: [{label, text, placeholder, source, start, end, confidence}], redacted_text}`. Etykiety polskie: `OSOBA, EMAIL, TELEFON, ADRES, URL, DATA, SEKRET, IBAN, NIP, PESEL, KOD`.

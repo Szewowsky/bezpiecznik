@@ -52,6 +52,25 @@ PESEL_WITH_CONTEXT = re.compile(
 # Bezpieczny bez kontekstu (rare false-match w innych liczbach).
 POSTAL_CODE_PL = re.compile(r"\b(\d{2}-\d{3})\b")
 
+# Polski adres z prefixem — uzupełnia OPF który nie rozumie polskich adresów.
+# Łapie: "ul. Słoneczna 12/4", "al. Jerozolimskie 100", "Aleje Jerozolimskie 100"
+# Stop chars: koniec linii, kropka kończąca zdanie, przecinek, średnik (typowe
+# separatory między elementami adresu).
+ADDRESS_PREFIX_PL = re.compile(
+    r"\b(?:ul\.|al\.|Aleje|aleja|plac|pl\.|osiedle|os\.|rondo|skwer|bulwar|"
+    r"Ul\.|Al\.|Plac|Pl\.|Osiedle|Os\.|Rondo|Skwer|Bulwar)\s+"
+    r"([A-ZŻŹĆĄŚĘŁÓŃ][\wŻŹĆĄŚĘŁÓŃżźćąśęłóń\s\-/.]{2,80}?)"
+    r"(?=,|;|\.\s|\n|$)",
+    re.UNICODE,
+)
+
+# Słowa-klucze adresu — gdy OPF złapał PERSON span z którymś z tych prefiksów,
+# to nie osoba tylko ulica. Reklasyfikujemy na private_address.
+ADDRESS_KEYWORDS_PREFIX = (
+    "ul.", "al.", "aleje", "aleja", "plac", "pl.",
+    "osiedle", "os.", "rondo", "skwer", "bulwar",
+)
+
 
 def find_pii(text: str) -> list[RegexSpan]:
     """
@@ -122,8 +141,44 @@ def find_pii(text: str) -> list[RegexSpan]:
             )
         )
 
+    # Polskie adresy z prefixem (ul./al./Aleje/Plac itd.) — OPF tego nie łapie
+    # albo myli z OSOBA. Patternem łapiemy CAŁY span od prefiksu do separatora.
+    for match in ADDRESS_PREFIX_PL.finditer(text):
+        spans.append(
+            RegexSpan(
+                label="private_address",
+                start=match.start(),
+                end=match.end(),
+                text=match.group(0),
+                placeholder="<ADRES>",
+                source="regex:address_pl",
+            )
+        )
+
     spans.sort(key=lambda s: s.start)
     return spans
+
+
+def reclassify_address_persons(opf_spans: list[dict]) -> list[dict]:
+    """
+    Reklasyfikator: OPF często myli polskie ulice ('Aleje Jerozolimskie') z osobami.
+    Gdy private_person span zaczyna się od address keyword (Aleje, ul., Plac, ...) —
+    zmieniamy label na private_address.
+
+    Bezpieczne: nie zmieniamy spanów które OPF już dał jako address ani niczego
+    poza PERSON. Pozycje (start/end) zostają nietknięte.
+    """
+    out = []
+    for span in opf_spans:
+        if span.get("label") != "private_person":
+            out.append(span)
+            continue
+        text_lower = span.get("text", "").lower().strip()
+        if any(text_lower.startswith(kw) for kw in ADDRESS_KEYWORDS_PREFIX):
+            out.append({**span, "label": "private_address"})
+        else:
+            out.append(span)
+    return out
 
 
 # Słowa-klucze PII które OPF błędnie klasyfikuje jako PERSON
