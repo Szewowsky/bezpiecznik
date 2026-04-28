@@ -1,5 +1,7 @@
 # Bezpiecznik
 
+![Sheriff Octopus](sheriff-octopus.png)
+
 **Lokalny strażnik danych wrażliwych - przed wysłaniem do AI.**
 
 Wklejasz tekst (mail, transkrypt, notatkę) lub przeciągasz plik. Bezpiecznik znajduje i maskuje dane osobowe (imiona, e-maile, telefony, IBAN, NIP, PESEL, adresy) i daje Ci bezpieczną wersję, którą możesz spokojnie wysłać do ChatGPT, Claude czy innego AI.
