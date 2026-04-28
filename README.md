@@ -1,67 +1,257 @@
-# Privacy Tool / Bezpiecznik
+# Bezpiecznik
 
-Lokalna apka desktop do wykrywania i maskowania PII (dane osobowe) w tekstach. Drag-and-drop pliku lub paste tekst → masked output. **Wszystko lokalnie. Zero chmury.**
+**Lokalny strażnik danych wrażliwych - przed wysłaniem do AI.**
 
-**Hybrid detection:**
-- 🤖 [OpenAI Privacy Filter](https://github.com/openai/privacy-filter) — kontekstowe PII (PERSON, EMAIL, PHONE, ADDRESS, SECRET)
-- 🔧 Regex layer dla polskich strukturalnych identyfikatorów (IBAN PL, NIP, PESEL, kod pocztowy)
+Wklejasz tekst (mail, transkrypt, notatkę) lub przeciągasz plik. Bezpiecznik znajduje i maskuje dane osobowe (imiona, e-maile, telefony, IBAN, NIP, PESEL, adresy) i daje Ci bezpieczną wersję, którą możesz spokojnie wysłać do ChatGPT, Claude czy innego AI.
 
-**Dwa frontendy:**
-- **Bezpiecznik** (nowy) — FastAPI + React/CSS, port 8000, 3 motywy (Minimal Dark / Terminal / Light), polskie etykiety
-- **Gradio legacy** — port 7860, prosty drag-drop + JSON output
+> **Wszystko dzieje się na Twoim komputerze.** Tekst nigdy nie opuszcza tej aplikacji - zero połączeń z internetem (poza pierwszym pobraniem modelu).
 
-> ⚠️ **Output wymaga human review.** Narzędzie to *data minimization aid*, nie compliance certification. RODO wciąż wymaga DPA dla US-vendors.
+---
 
-## Po co
+## Spis treści
 
-Sanityzacja tekstów przed wysłaniem do external LLM API (Gemini, OpenAI, OpenRouter):
+1. [Dla kogo to jest](#dla-kogo-to-jest)
+2. [Instalacja krok po kroku](#instalacja-krok-po-kroku-dla-osób-nietechnicznych)
+3. [Jak korzystać](#jak-korzystać)
+4. [Aktualizacja do nowszej wersji](#aktualizacja-do-nowszej-wersji)
+5. [FAQ](FAQ.md)
+6. [Część techniczna](#część-techniczna-dla-developerów)
 
-- Pre-API sanitization danych klientów (kursy, mentoring)
-- Pre-publish scan transkryptów YouTube
-- Sanityzacja voice notes / wispr-notes
-- Detekcja API keys / secrets w tekstach z code-on-screen
+---
 
-## Setup (macOS Apple Silicon)
+## Dla kogo to jest
+
+Jeśli pracujesz z AI (ChatGPT, Claude, Gemini) i czasem wrzucasz do niego:
+- maile od klientów,
+- transkrypty rozmów,
+- notatki głosowe,
+- dane do faktur,
+- raporty z imionami i kontaktami,
+
+to **Bezpiecznik** zamaskuje wszystkie dane osobowe **zanim** wyślesz tekst do chmury. Zamiast `Anna Nowak, anna@example.com` wyślesz `<OSOBA_1>, <EMAIL_1>`. AI dostanie wszystko czego potrzebuje do pracy, ale bez Twoich (lub klienta) prywatnych danych.
+
+---
+
+## Instalacja krok po kroku (dla osób nietechnicznych)
+
+> Przewidywany czas: **15 minut** (z czego 5 minut to pobieranie modelu w tle podczas pierwszego uruchomienia).
+> Wymagania: **Mac** (Apple Silicon - M1/M2/M3/M4), **macOS Sonoma lub nowszy**, ~6 GB wolnego miejsca.
+
+### Krok 1: Otwórz Terminal
+
+- W prawym górnym rogu Maca kliknij ikonę **lupy** (Spotlight) lub naciśnij `⌘ + Spacja`
+- Wpisz: `Terminal` i naciśnij Enter
+- Otworzy się czarne (lub białe) okno - to **Terminal**. Tam wpisuje się komendy.
+
+### Krok 2: Sprawdź czy masz Pythona
+
+W Terminalu wklej (Cmd+V) i naciśnij Enter:
 
 ```bash
-# 1. Venv (Python 3.10–3.14)
+python3 --version
+```
+
+Powinno pojawić się np. `Python 3.13.0` (cyfra po `3.` musi być co najmniej **10**, czyli 3.10, 3.11, 3.12, 3.13 lub 3.14).
+
+**Jeśli widzisz błąd "command not found":**
+- Pobierz Pythona z [python.org/downloads](https://www.python.org/downloads/) (wybierz wersję 3.12 lub nowszą)
+- Po zainstalowaniu zamknij Terminal i otwórz go ponownie
+- Powtórz `python3 --version`
+
+### Krok 3: Sprawdź czy masz git
+
+W Terminalu:
+
+```bash
+git --version
+```
+
+Jeśli widzisz błąd, macOS sam zaproponuje instalację - kliknij **Install** w okienku, które wyskoczy. Trwa to ~5 minut.
+
+### Krok 4: Pobierz Bezpiecznika
+
+Wklej w Terminalu (zastąp `<URL>` adresem repozytorium, który dał Ci autor):
+
+```bash
+cd ~/Documents
+git clone <URL> bezpiecznik
+cd bezpiecznik
+```
+
+Jeśli pyta o login do GitHub - zaloguj się (lub poproś autora o dostęp do repo).
+
+### Krok 5: Zainstaluj zależności
+
+W Terminalu (jesteś już w katalogu `bezpiecznik`):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+To zajmuje **5-10 minut**. Ściąga się ~3 GB różnych bibliotek. Możesz w tym czasie zrobić sobie kawę.
+
+### Krok 6: Uruchom Bezpiecznika
+
+W Terminalu (wciąż w katalogu `bezpiecznik`):
+
+```bash
+.venv/bin/uvicorn server:app --port 8000
+```
+
+W oknie pojawi się komunikat typu:
+
+```
+INFO:     Uvicorn running on http://127.0.0.1:8000
+```
+
+To znaczy, że Bezpiecznik działa. **Nie zamykaj tego okna Terminala** - aplikacja działa dopóki ono jest otwarte.
+
+### Krok 7: Otwórz aplikację w przeglądarce
+
+W Safari lub Chrome wpisz w pasku adresu:
+
+```
+http://localhost:8000
+```
+
+Zobaczysz Bezpiecznika. **Pierwszy raz**, gdy klikniesz "Zamaskuj dane", aplikacja pobiera model AI (~3 GB, jednorazowo). Potrwa to **~50 sekund**. Każde następne maskowanie jest natychmiastowe.
+
+---
+
+## Jak korzystać
+
+### Wariant A: Wklejam tekst
+
+1. Wybierz zakładkę **Wklej tekst** (domyślnie)
+2. Wklej tekst do pola (Cmd+V)
+3. Kliknij **Zamaskuj dane**
+4. Po prawej zobaczysz wersję z zamaskowanymi danymi
+5. Kliknij **Kopiuj zamaskowane** lub **Pobierz .md**
+
+### Wariant B: Wgrywam plik
+
+1. Wybierz zakładkę **Wgraj plik**
+2. Kliknij **Wybierz plik z dysku** lub przeciągnij plik z Findera
+3. Pojawia się podgląd zawartości
+4. Klik **Zamaskuj dane**
+
+Obsługiwane formaty: `.md`, `.txt`, `.csv`, `.tsv`, `.json`, `.log`, `.html`, `.srt`, `.vtt` (do 5 MB).
+
+### Wariant C: Z weryfikacją wzrokową
+
+W panelu po prawej przełącz na **Z podświetleniem** - zobaczysz oryginał z kolorowymi zaznaczeniami, co zostało wykryte. Pomocne, gdy chcesz sprawdzić czy nic ważnego nie zostało pominięte.
+
+### Po pracy
+
+Wracając do Terminala (gdzie chodzi serwer), naciśnij `Ctrl + C` żeby zatrzymać aplikację.
+
+Następnym razem - krok 6 i 7 (pomijasz instalację).
+
+---
+
+## Aktualizacja do nowszej wersji
+
+Gdy autor wypuści nową wersję, masz **trzy sposoby** aktualizacji:
+
+### Sposób 1: Skrypt update (zalecany, jeden klik)
+
+W Terminalu, w katalogu `bezpiecznik`:
+
+```bash
+./update.sh
+```
+
+Skrypt pokaże co się zmieniło, zapyta o potwierdzenie i wszystko zainstaluje. Twoje lokalne zmiany (jeśli były) zostaną zachowane.
+
+### Sposób 2: Ręcznie (dla zaawansowanych)
+
+```bash
+cd ~/Documents/bezpiecznik
+git pull
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Sposób 3: Powiadomienie od autora
+
+Autor będzie informował o nowych wersjach (LinkedIn, mail). Każda nowa wersja będzie miała listę zmian (changelog) na GitHub w zakładce **Releases**.
+
+> **Tip:** Przed aktualizacją zamknij aplikację (`Ctrl+C` w Terminalu), gdzie chodzi serwer. Po aktualizacji uruchom ponownie krokiem 6 powyżej.
+
+---
+
+## FAQ
+
+Najczęstsze pytania (zwłaszcza dla osób nietechnicznych): **[FAQ.md](FAQ.md)**
+
+---
+
+## Część techniczna (dla developerów)
+
+### Co to jest
+
+Hybrid PII detection (lokalnie):
+
+- 🤖 **OpenAI Privacy Filter** - kontekstowe PII (PERSON, EMAIL, PHONE, ADDRESS, SECRET, URL)
+- 🔧 **Regex layer** - polskie strukturalne identyfikatory (IBAN PL, NIP, PESEL, kod pocztowy)
+- 🇵🇱 **Address reklasyfikator** - "ul. Słoneczna 12" + "Aleje Jerozolimskie 100" → ADRES (nie OSOBA)
+
+Dwa frontendy:
+- **Bezpiecznik** (port 8000) - FastAPI + React (Babel-in-browser), 3 motywy, polskie etykiety, **drag&drop + paste tabs + dialog confirm + 9 formatów**
+- **Gradio legacy** (port 7860) - prosty drag-drop + JSON output
+
+### Setup deweloperski
+
+```bash
 cd privacy-tool
 python3 -m venv .venv
 source .venv/bin/activate
-
-# 2. Install
 pip install -r requirements.txt
 
-# 3a. Bezpiecznik (nowy UI, polecane)
-uvicorn server:app --host 127.0.0.1 --port 8000
-# → http://localhost:8000
+# Bezpiecznik (nowy UI)
+uvicorn server:app --port 8000
 
-# 3b. Gradio legacy
+# Gradio legacy
 python app.py
-# → http://localhost:7860 (auto-launch)
 ```
 
-Pierwszy `redact` ładuje model OPF ~50s (CPU, 3 GB pobiera się przy pierwszym uruchomieniu do `~/.opf/`). Kolejne wywołania są natychmiastowe.
+### Testy
 
-## Wymagania
+```bash
+.venv/bin/pytest test_pii_regex.py test_server.py -v   # 76/76 PASS
+```
 
-- macOS Apple Silicon (M-series)
-- Python 3.10+ (przetestowane na 3.14.3)
-- ~6 GB wolnego miejsca (model + deps + venv)
-- Internet (jednorazowo, do pobrania modelu)
+### Architektura
 
-> **Dependency notes (Python 3.13+):** stdlib `audioop` został usunięty. Wymagamy shim `audioop-lts` (już w `requirements.txt`). Gradio 4.x ma bug z Pythonem 3.14 — używamy Gradio 5.x.
+```
+privacy-tool/
+├── server.py           FastAPI: static + /api/redact, port 8000
+├── app.py              Gradio legacy, port 7860
+├── pii_service.py      Wspólny pipeline (redact_text)
+├── opf_runtime.py      Singleton OPF loader (3 GB shared)
+├── pii_regex.py        Regex PL: IBAN, NIP, PESEL, kod, adres + reklasyfikator
+├── test_pii_regex.py   55 testów (regex layer)
+├── test_server.py      21 testów (API contract + dedup + reklasyfikacja)
+├── update.sh           Skrypt aktualizacji dla nietechnicznych
+└── web/                Frontend Bezpiecznik
+    ├── index.html
+    ├── styles.css      3 motywy (minimal-dark / terminal / light)
+    ├── app.jsx         Root + WarningStrip + tweaks panel
+    ├── editor.jsx      InputPanel (tabs paste/upload) + OutputPanel
+    ├── detection-panel.jsx
+    ├── data.jsx        SAMPLES + LABEL_META
+    └── tweaks-panel.jsx
+```
 
-## Co potrafi (MVP)
+### API
 
-- Drag-drop `.txt` / `.md`
-- Paste textarea jako fallback
-- Output: zredagowany tekst + lista entities (JSON view, oznaczenie `source: opf|regex:*`)
-- Copy do clipboard + download `*_redacted.md`
-- Permanent warning banner
-- Localhost-only binding (`127.0.0.1:7860`)
+`POST /api/redact` `{text}` → `{detections: [...], redacted_text}`.
 
-## Czego NIE potrafi (świadomie out-of-scope)
+Etykiety polskie: `OSOBA, EMAIL, TELEFON, ADRES, URL, DATA, SEKRET, IBAN, NIP, PESEL, KOD`.
+
+### Czego NIE robi
 
 - Hosted version (Phase 2)
 - Auth / multi-user
@@ -69,81 +259,20 @@ Pierwszy `redact` ładuje model OPF ~50s (CPU, 3 GB pobiera się przy pierwszym 
 - PDF / DOCX / Excel
 - Real-time streaming
 - Compliance certification
-- Wykrywanie kategorii `ORGANIZATION` (brak w taksonomii Privacy Filter)
-- Wykrywanie kategorii `DATE` (przegapia polskie daty — out of scope)
+- Wykrywanie kategorii `ORGANIZATION` (poza taksonomią Privacy Filter)
+- Wykrywanie kategorii `DATE` (słabo dla PL - out of scope)
 
-## Kategorie PII
+### Status
 
-| Kategoria | Source | Komentarz |
-|-----------|--------|-----------|
-| `PRIVATE_PERSON` | OPF | Imię, nazwisko, kontekstowo |
-| `PRIVATE_EMAIL` | OPF | Wszystkie formaty |
-| `PRIVATE_PHONE` | OPF | +48, bez prefix, ze spacjami |
-| `PRIVATE_ADDRESS` | OPF | Polskie adresy z kontekstem |
-| `PRIVATE_ACCOUNT_NUMBER` | OPF + 🔧 regex | Numery kont, NIP, PESEL — regex łata przegapienia OPF |
-| `PRIVATE_URL` | OPF | URLs |
-| `PRIVATE_DATE` | OPF | Daty (słaby recall na PL — known limitation) |
-| `SECRET` | OPF | API keys, tokens (hit np. `sk_test_...`) |
+- **Phase 1** ✅ DONE (2026-04-27 rano) - Setup + Gradio MVP + 55/55 testów
+- **Phase 1.5** ✅ DONE (2026-04-27 wieczorem) - Bezpiecznik UI (FastAPI + React, 3 motywy)
+- **Phase 2 UX** ✅ DONE (2026-04-28) - Tabs paste/upload + drag&drop + dialog confirm + preview + 9 formatów
+- **Phase 2 detection** (planned) - spaCy `pl_core_news_lg` (ORG, fleksja, miasta)
 
-**Regex layer** (deterministic, dla strukturalnych PL PII):
-- IBAN PL: 26 cyfr z/bez prefix `PL`, ze/bez separatorów (` ` / `-`)
-- NIP PL: 10 cyfr po słowie kluczowym `NIP`, formaty z myślnikami i bez
-- PESEL: 11 cyfr po słowie kluczowym `PESEL` (do 30 znaków przed)
-
-## Polski recall (smoke test 2026-04-27, hybrid layer)
-
-3 polskie samples (email OMA, transkrypt YT, wispr note) — wszystkie krytyczne PII wykryte:
-
-| Kategoria | Recall (przed regex) | Recall (po regex) |
-|-----------|---------------------|-------------------|
-| EMAIL | 100% | 100% |
-| PHONE | 100% | 100% |
-| SECRET | 100% | 100% |
-| PERSON | ~67% | ~67% |
-| ADDRESS | 50% | 50% |
-| **ACCOUNT_NUMBER** | 50% | **100%** ← regex łata IBAN/NIP/PESEL |
-
-**30/30 pytestów PASS** (`test_pii_regex.py`).
-
-## License
+### License
 
 TBD (start private). Privacy Filter sam jest Apache 2.0.
 
-## Status
+---
 
-- **Phase 1** ✅ DONE (2026-04-27 rano) — Setup + Gradio MVP + 55/55 testów
-- **Phase 1.5** ✅ DONE (2026-04-27 wieczorem) — Bezpiecznik UI (FastAPI + React, 3 motywy, polskie etykiety)
-
-PRD: [`Content Rob/materiały/PRDs/2026-04-27_privacy-tool-prd.md`](../Content%20Rob/materia%C5%82y/PRDs/2026-04-27_privacy-tool-prd.md)
-
-### Phase 2 (planned)
-
-- ORG detection (spaCy `pl_core_news_lg` lub LLM tagger) — nazwy firm bez suffix
-- macOS Quick Action via CLI (right-click w Finderze)
-- Hosted version dla uczestników kursów (osobny PRD)
-- Polish finetune (jeśli recall realnie boli — lazy approach)
-- Operating point preset (recall vs precision slider)
-- Bundle Vite (zamiast Babel-in-browser CDN) — gdy dev reload za wolny
-
-## Architektura (Phase 1.5)
-
-```
-privacy-tool/
-├── server.py           FastAPI: static + /api/redact, port 8000
-├── app.py              Gradio legacy, port 7860
-├── pii_service.py      Wspólny pipeline (redact_text), używany przez oba serwery
-├── opf_runtime.py      Singleton OPF loader
-├── pii_regex.py        Regex PL (IBAN, NIP, PESEL, kod pocztowy)
-├── test_pii_regex.py   55 testów (regex layer)
-├── test_server.py      6 testów (API contract, FastAPI TestClient)
-└── web/                Frontend Bezpiecznik
-    ├── index.html      = Bezpiecznik.html alias
-    ├── styles.css      3 motywy (minimal-dark / terminal / light)
-    ├── app.jsx         Root komponent, fetch /api/redact
-    ├── editor.jsx      Input + Output panel
-    ├── detection-panel.jsx  Boczny panel z grupami detekcji
-    ├── data.jsx        SAMPLES + LABEL_META
-    └── tweaks-panel.jsx     Floating tweaks UI (Claude Design protocol)
-```
-
-API: `POST /api/redact` `{text}` → `{detections: [{label, text, placeholder, source, start, end, confidence}], redacted_text}`. Etykiety polskie: `OSOBA, EMAIL, TELEFON, ADRES, URL, DATA, SEKRET, IBAN, NIP, PESEL, KOD`.
+> ⚠️ **Output wymaga human review.** Narzędzie to *data minimization aid*, nie compliance certification. RODO wciąż wymaga DPA dla US-vendors.

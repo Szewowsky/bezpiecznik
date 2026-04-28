@@ -289,19 +289,33 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
 .warn-strip {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: 10px 14px;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 20px;
   border-radius: var(--r-md);
   background: var(--warn-bg);
   border: 1px solid color-mix(in oklch, var(--warn) 30%, transparent);
   color: var(--fg);
-  font-size: 13px;
+  font-size: 16px;
+  line-height: 1.5;
+  position: relative;
 }
-.warn-subtle { font-size: 12.5px; }
-.warn-strip .warn-icon { color: var(--warn); font-size: 15px; }
-.warn-strip > span { flex: 1; color: var(--fg-mute); }
-.warn-strip > span b { color: var(--fg); font-weight: 600; }
-.warn-strip button {
+.warn-subtle { font-size: 16px; }
+.warn-strip .warn-icon {
+  color: var(--warn);
+  font-size: 18px;
+  flex: 0 0 auto;
+  line-height: 1.5;
+}
+.warn-strip .warn-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--fg-mute);
+  max-width: 980px;
+}
+.warn-strip .warn-text b { color: var(--fg); font-weight: 600; }
+.warn-strip > button {
+  flex: 0 0 auto;
   background: transparent;
   border: 0;
   color: var(--fg-dim);
@@ -310,15 +324,20 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
   font-size: 16px;
   display: grid; place-items: center;
   transition: var(--transition);
+  cursor: pointer;
 }
-.warn-strip button:hover { background: rgba(0,0,0,0.15); color: var(--fg); }
+.warn-strip > button:hover { background: rgba(0,0,0,0.15); color: var(--fg); }
+@media (max-width: 720px) {
+  .warn-strip { flex-wrap: wrap; align-items: flex-start; }
+  .warn-strip > button { margin-left: auto; align-self: flex-start; }
+}
 .warn-prominent {
   align-items: flex-start;
   padding: 14px 16px;
 }
 .warn-prom-body { display: flex; gap: var(--space-3); flex: 1; }
 .warn-prom-body > div b { color: var(--fg); font-weight: 600; display: block; margin-bottom: 4px; }
-.warn-prom-body > div p { margin: 0; color: var(--fg-mute); font-size: 12.5px; line-height: 1.5; }
+.warn-prom-body > div p { margin: 0; color: var(--fg-mute); font-size: 15px; line-height: 1.55; }
 
 /* ── Workspace Grid ─────────────────────────────────────────────────────── */
 .workspace {
@@ -561,6 +580,294 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
   border-radius: 3px;
   color: var(--fg-mute);
 }
+
+/* ── Input tabs (Wklej / Wgraj plik) ────────────────────────────────────── */
+.input-panel { position: relative; }
+.input-tabs {
+  /* reuse .seg-control visuals; only adjust ico spacing */
+}
+.input-tabs button .ico {
+  margin-right: 4px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* ── Tab panel transitions ──────────────────────────────────────────────── */
+.tab-panel { transition: opacity 140ms ease-out; }
+.tab-panel[hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .tab-panel { transition: none; }
+}
+
+/* ── Dropzone overlay (paste mode = intercept hint) ─────────────────────── */
+.input-panel.mode-upload.is-dragging {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+}
+.dropzone-overlay {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklch, var(--bg-sunk) 92%, transparent);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  z-index: 10;
+  pointer-events: none;
+  border-radius: var(--r-md);
+  animation: dropzone-fade 120ms ease-out;
+}
+@keyframes dropzone-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.dropzone-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 36px;
+  border: 1.5px dashed var(--accent);
+  border-radius: var(--r-md);
+  background: var(--bg-elev);
+  text-align: center;
+  max-width: 460px;
+}
+.dropzone-glyph {
+  font-size: 32px;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.dropzone-card p { margin: 0; color: var(--fg); font-size: 14px; }
+.dropzone-card p b { color: var(--fg); font-weight: 600; }
+.dropzone-card small { color: var(--fg-dim); font-size: 11.5px; font-family: var(--font-mono); }
+/* Intercept variant in paste mode — softer, informational */
+.dropzone-intercept .dropzone-card {
+  border-color: var(--fg-dim);
+  border-style: dashed;
+}
+.dropzone-intercept .dropzone-glyph { color: var(--fg-mute); }
+
+/* ── Upload panel (mode-upload) ─────────────────────────────────────────── */
+.upload-panel {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+  padding: 16px;
+}
+.upload-zone {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px 24px;
+  border: 2px dashed var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-sunk);
+  transition: var(--transition);
+  text-align: center;
+}
+.upload-zone.is-dragging {
+  border-color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 8%, var(--bg-sunk));
+}
+.upload-zone:hover { border-color: color-mix(in oklch, var(--accent) 50%, var(--border)); }
+.upload-trigger {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 28px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--fg);
+  cursor: pointer;
+  transition: var(--transition);
+  min-width: 280px;
+}
+.upload-trigger:hover {
+  border-color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 6%, var(--bg-elev));
+  transform: translateY(-1px);
+}
+.upload-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.upload-glyph {
+  font-size: 28px;
+  color: var(--accent);
+  line-height: 1;
+}
+.upload-cta { font-size: 15px; color: var(--fg); }
+.upload-cta b { color: var(--fg); font-weight: 600; }
+.upload-trigger small { color: var(--fg-dim); font-size: 12px; }
+.upload-formats {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg-dim);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  align-items: center;
+  max-width: 520px;
+}
+.upload-formats code {
+  background: var(--bg-elev);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--fg-mute);
+}
+.upload-formats .upload-limit {
+  margin-left: 6px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+  color: var(--fg-mute);
+}
+.dragging-status {
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 500;
+  min-height: 18px;
+}
+
+/* ── Upload success preview ─────────────────────────────────────────────── */
+.upload-success {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 24px;
+  border: 1px solid color-mix(in oklch, var(--ok, #4ade80) 35%, var(--border));
+  border-radius: var(--r-md);
+  background: color-mix(in oklch, var(--ok, #4ade80) 6%, var(--bg-elev));
+  min-height: 0;
+}
+.upload-success-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  flex: 0 0 auto;
+}
+@media (max-width: 720px) {
+  .upload-success-actions { width: 100%; }
+  .upload-success-actions button { flex: 1; }
+}
+.upload-success-glyph {
+  flex: 0 0 auto;
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--ok, #4ade80) 20%, transparent);
+  color: var(--ok, #4ade80);
+  font-size: 20px;
+  font-weight: 700;
+}
+.upload-success-meta { flex: 1; min-width: 0; }
+.upload-success-meta b { display: block; color: var(--fg); font-weight: 600; font-size: 14px; margin-bottom: 2px; word-break: break-word; }
+.upload-success-meta small { color: var(--fg-mute); font-size: 12px; font-family: var(--font-mono); }
+.upload-success-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+
+.upload-preview-label {
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-dim);
+  flex: 0 0 auto;
+}
+.upload-preview {
+  flex: 1 1 auto;
+  min-height: 120px;
+  max-height: 100%;
+  overflow: auto;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm, 8px);
+  background: var(--bg-sunk);
+  color: var(--fg-mute);
+  font-family: var(--font-mono-body);
+  font-size: var(--editor-font-size, 13px);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: text;
+}
+.upload-preview:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ── Confirm dialog (replace draft) ─────────────────────────────────────── */
+.confirm-dialog {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-elev);
+  color: var(--fg);
+  padding: 24px;
+  max-width: 480px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+.confirm-dialog::backdrop {
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(2px);
+}
+.confirm-dialog h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.confirm-dialog p {
+  margin: 0 0 18px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--fg-mute);
+}
+.confirm-dialog p b { color: var(--fg); font-weight: 600; }
+.confirm-dialog .dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ── File error toast (in input panel) ──────────────────────────────────── */
+.file-error {
+  position: absolute;
+  left: 16px; right: 16px; bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--warn-bg);
+  border: 1px solid color-mix(in oklch, var(--warn) 40%, transparent);
+  border-radius: var(--r-sm, 8px);
+  font-size: 12.5px;
+  color: var(--fg);
+  z-index: 5;
+}
+.file-error .warn-icon { color: var(--warn); flex: 0 0 auto; }
+.file-error > span:not(.warn-icon) { flex: 1; }
+.file-error button {
+  background: transparent;
+  border: 0;
+  color: var(--fg-dim);
+  width: 20px; height: 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  display: grid; place-items: center;
+  cursor: pointer;
+}
+.file-error button:hover { background: rgba(0,0,0,0.15); color: var(--fg); }
 
 /* ── Output ─────────────────────────────────────────────────────────────── */
 .output-body {

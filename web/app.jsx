@@ -258,8 +258,8 @@ function WarningStrip({ variant, onDismiss }) {
   if (variant === "subtle") {
     return (
       <div className="warn-strip warn-subtle">
-        <span className="warn-icon">⚠</span>
-        <span>
+        <span className="warn-icon" aria-hidden="true">⚠</span>
+        <span className="warn-text">
           Najlepiej wykrywa <b>osoby, e-mail, telefon, IBAN, NIP, PESEL</b>. Nazwy firm bez sufiksów (Sp. z o.o., S.A.) i polska fleksja imion mogą wymagać <b>ręcznej kontroli</b>.
         </span>
         <button onClick={onDismiss} aria-label="Zamknij">×</button>
@@ -269,10 +269,10 @@ function WarningStrip({ variant, onDismiss }) {
   return (
     <div className="warn-strip warn-prominent">
       <div className="warn-prom-body">
-        <span className="warn-icon">⚠</span>
-        <div>
+        <span className="warn-icon" aria-hidden="true">⚠</span>
+        <div className="warn-text">
           <b>Output wymaga ręcznej weryfikacji</b>
-          <p>Najlepiej wykrywa: osoby, e-mail, telefon, IBAN, NIP, PESEL. <b>Znane limity:</b> nazwy firm bez sufiksów (np. "Brandbox"), polska fleksja imion (np. "Pawłem"), ulice mogą być mylone z osobami. To narzędzie minimalizuje ryzyko, ale nie jest certyfikatem zgodności — RODO wymaga umowy DPA dla dostawców z USA.</p>
+          <p>Najlepiej wykrywa: osoby, e-mail, telefon, IBAN, NIP, PESEL. <b>Znane limity:</b> nazwy firm bez sufiksów (np. "Brandbox"), polska fleksja imion (np. "Pawłem"), ulice mogą być mylone z osobami. To narzędzie minimalizuje ryzyko, ale nie jest certyfikatem zgodności - RODO wymaga umowy DPA dla dostawców z USA.</p>
         </div>
       </div>
       <button onClick={onDismiss} className="warn-close" aria-label="Zamknij">×</button>
