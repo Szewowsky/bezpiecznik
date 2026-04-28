@@ -58,7 +58,7 @@
   --accent-fg: #8effb6;
   --accent-2:  #ffb24a;
   --warn:      #ffb24a;
-  --warn-bg:   rgba(255,178,74,0.12);
+  --warn-bg:   rgba(255,178,74,0.04);
   --ok:        #5fff9e;
   --shadow:    0 0 0 1px rgba(95,255,158,0.08), 0 8px 28px rgba(0,0,0,0.6),
                0 0 60px rgba(95,255,158,0.04);
@@ -218,6 +218,35 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
 }
 
 .header-status { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+.theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--fg-mute);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  font-family: inherit;
+}
+.theme-switch:hover {
+  border-color: color-mix(in oklch, var(--accent) 50%, var(--border));
+  color: var(--fg);
+}
+.theme-switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.theme-switch-icon {
+  font-size: 13px;
+  line-height: 1;
+  color: var(--accent);
+}
 .status-stats {
   display: flex;
   align-items: center;
@@ -1041,6 +1070,44 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 [data-theme="light"] .seg-control button.seg-active { box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+
+/* ── Light theme contrast fixes ─────────────────────────────────────────── */
+[data-theme="light"] .sample-pill {
+  background: oklch(0.96 0.005 240);
+  border-color: oklch(0.85 0.008 240);
+  color: oklch(0.30 0.01 240);
+}
+[data-theme="light"] .sample-pill:hover {
+  background: oklch(0.93 0.04 230);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+[data-theme="light"] .seg-control {
+  background: oklch(0.94 0.005 240);
+  border-color: oklch(0.85 0.008 240);
+}
+[data-theme="light"] .seg-control button { color: oklch(0.40 0.01 240); }
+[data-theme="light"] .seg-control button.seg-active {
+  background: white;
+  color: oklch(0.18 0.02 240);
+}
+[data-theme="light"] .btn-ghost {
+  border-color: oklch(0.85 0.008 240);
+  color: oklch(0.30 0.01 240);
+}
+[data-theme="light"] .btn-ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+[data-theme="light"] .panel,
+[data-theme="light"] .detect-panel {
+  background: white;
+  border-color: oklch(0.90 0.008 240);
+}
+[data-theme="light"] .panel-foot,
+[data-theme="light"] .panel-head {
+  background: oklch(0.985 0.003 240);
+}
 
 /* ── Detection Panel ────────────────────────────────────────────────────── */
 .detect-panel {

@@ -411,7 +411,7 @@ function InputPanel({ text, onChange, onSampleLoad, onRedact, isLoading, hasReda
 }
 
 // ── OutputPanel ─────────────────────────────────────────────────────────────
-function OutputPanel({ originalText, spans, mode, setMode, hiddenLabels, hoveredId, setHoveredId, theme, onCopy, onDownload, copyState, isLoading, error }) {
+function OutputPanel({ originalText, spans, mode, setMode, hiddenLabels, hoveredId, setHoveredId, theme, onCopy, onDownload, copyState, isLoading, error, hasRedaction }) {
   const segments = useMemo(() => buildSegments(originalText, spans), [originalText, spans]);
 
   // Tekst do wyświetlenia w trybie "redacted"
@@ -501,7 +501,7 @@ function OutputPanel({ originalText, spans, mode, setMode, hiddenLabels, hovered
             <p>Lokalny model analizuje tekst…</p>
             <small>Pierwsza analiza może potrwać ~30s. Kolejne są natychmiastowe.</small>
           </div>
-        ) : spans.length === 0 && !originalText ? (
+        ) : !hasRedaction ? (
           <div className="output-empty">
             <div className="empty-glyph">⌘</div>
             <p>Tutaj pojawi się Twój tekst z zamaskowanymi danymi.</p>

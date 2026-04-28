@@ -10,8 +10,40 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "panelOpen": true
 }/*EDITMODE-END*/;
 
+const THEMES = [
+  { value: "minimal-dark", label: "Minimal", icon: "◐" },
+  { value: "terminal", label: "Terminal", icon: "▮" },
+  { value: "light", label: "Light", icon: "☀" },
+];
+
+function loadStoredTheme() {
+  try {
+    const v = localStorage.getItem("bezpiecznik:theme");
+    if (v && THEMES.some((th) => th.value === v)) return v;
+  } catch (_) { /* ignore */ }
+  return null;
+}
+
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  // Restore saved theme on first mount (overrides default)
+  useEffectApp(() => {
+    const saved = loadStoredTheme();
+    if (saved && saved !== t.theme) setTweak("theme", saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist on change
+  useEffectApp(() => {
+    try { localStorage.setItem("bezpiecznik:theme", t.theme); } catch (_) {}
+  }, [t.theme]);
+
+  function cycleTheme() {
+    const idx = THEMES.findIndex((th) => th.value === t.theme);
+    const next = THEMES[(idx + 1) % THEMES.length];
+    setTweak("theme", next.value);
+  }
 
   // Stan
   const [text, setText] = useStateApp("");
@@ -133,7 +165,7 @@ function App() {
 
   return (
     <div className="app">
-      <Header sessionStats={sessionStats} theme={t.theme} />
+      <Header sessionStats={sessionStats} theme={t.theme} onCycleTheme={cycleTheme} />
 
       {t.showWarning !== "off" && !warningDismissed && (
         <WarningStrip
@@ -166,6 +198,7 @@ function App() {
           copyState={copyState}
           isLoading={isLoading}
           error={error}
+          hasRedaction={hasRedaction}
         />
         <DetectionPanel
           spans={hasRedaction ? spans : []}
@@ -220,7 +253,9 @@ function App() {
 }
 
 // ── Header ─────────────────────────────────────────────────────────────────
-function Header({ sessionStats, theme }) {
+function Header({ sessionStats, theme, onCycleTheme }) {
+  const cur = THEMES.find((th) => th.value === theme) || THEMES[0];
+  const next = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
   return (
     <header className="app-header">
       <div className="brand">
@@ -248,6 +283,16 @@ function Header({ sessionStats, theme }) {
             <span><b>{sessionStats.masked}</b><span>zamaskowanych</span></span>
           </div>
         )}
+        <button
+          type="button"
+          className="theme-switch"
+          onClick={onCycleTheme}
+          title={`Motyw: ${cur.label} (kliknij → ${next.label})`}
+          aria-label={`Zmień motyw. Aktualny: ${cur.label}. Następny: ${next.label}`}
+        >
+          <span className="theme-switch-icon" aria-hidden="true">{cur.icon}</span>
+          <span className="theme-switch-label">{cur.label}</span>
+        </button>
       </div>
     </header>
   );

@@ -1,0 +1,35 @@
+PolyForm Noncommercial License 1.0.0
+
+Copyright (c) 2026 Robert Szewczyk
+
+This source code is licensed under the PolyForm Noncommercial License 1.0.0.
+
+The full text of the license is available at:
+  https://polyformproject.org/licenses/noncommercial/1.0.0/
+
+SUMMARY (for convenience, not legally binding - read full text above):
+
+You may use, view, modify, distribute, and contribute to this software for
+any noncommercial purpose. Noncommercial purposes include:
+  - Personal use
+  - Education and research
+  - Use by noncommercial organizations (NGOs, schools, public institutions)
+  - Hobby and open-source projects
+
+You may NOT use this software:
+  - As part of any product or service offered for sale
+  - To generate revenue (directly or indirectly)
+  - In commercial business operations
+
+For commercial use, contact the author for a separate license:
+  Robert Szewczyk - https://linkedin.com/in/szewowsky
+
+THIRD-PARTY DEPENDENCIES:
+
+This project uses the following third-party libraries with their own licenses:
+  - OpenAI Privacy Filter (Apache 2.0)
+    https://github.com/openai/privacy-filter
+  - Other Python dependencies - see requirements.txt
+
+The PolyForm Noncommercial license applies only to the original code in
+this repository, not to bundled or required third-party software.
