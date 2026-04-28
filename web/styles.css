@@ -58,7 +58,7 @@
   --accent-fg: #8effb6;
   --accent-2:  #ffb24a;
   --warn:      #ffb24a;
-  --warn-bg:   rgba(255,178,74,0.04);
+  --warn-bg:   rgba(255,178,74,0.08);
   --ok:        #5fff9e;
   --shadow:    0 0 0 1px rgba(95,255,158,0.08), 0 8px 28px rgba(0,0,0,0.6),
                0 0 60px rgba(95,255,158,0.04);
@@ -323,8 +323,9 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
   padding: 12px 20px;
   border-radius: var(--r-md);
   background: var(--warn-bg);
-  border: 1px solid color-mix(in oklch, var(--warn) 30%, transparent);
+  border: 1px solid color-mix(in oklch, var(--warn) 35%, transparent);
   color: var(--fg);
+  font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.5;
   position: relative;
