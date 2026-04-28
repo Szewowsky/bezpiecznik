@@ -74,7 +74,7 @@ Wklej w Terminalu:
 
 ```bash
 cd ~/Documents
-git clone https://github.com/Szewowsky/privacy-tool.git bezpiecznik
+git clone https://github.com/Szewowsky/bezpiecznik.git
 cd bezpiecznik
 ```
 
@@ -203,7 +203,7 @@ Dwa frontendy:
 ### Setup deweloperski
 
 ```bash
-cd privacy-tool
+cd bezpiecznik
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -224,7 +224,7 @@ python app.py
 ### Architektura
 
 ```
-privacy-tool/
+bezpiecznik/
 ├── server.py           FastAPI: static + /api/redact, port 8000
 ├── app.py              Gradio legacy, port 7860
 ├── pii_service.py      Wspólny pipeline (redact_text)

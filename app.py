@@ -24,7 +24,7 @@ WARNING_BANNER = """
 > Sprawdź każdy redacted span przed wysłaniem do external LLM API.
 """
 
-TMP_DIR = Path(tempfile.gettempdir()) / "privacy-tool"
+TMP_DIR = Path(tempfile.gettempdir()) / "bezpiecznik"
 
 
 def redact(text: str, file_path: str | None) -> tuple[str, dict, str | None]:

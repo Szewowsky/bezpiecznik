@@ -30,7 +30,7 @@ step()  { printf "\n${C_DIM}→${C_END} %s\n" "$1"; }
 cd "$(dirname "$0")"
 
 # ── Sprawdzenia ───────────────────────────────────────────────────────────
-[ -d ".git" ] || fail "To nie jest repozytorium git. Uruchom skrypt w katalogu privacy-tool."
+[ -d ".git" ] || fail "To nie jest repozytorium git. Uruchom skrypt w katalogu bezpiecznik."
 command -v git >/dev/null 2>&1 || fail "Git nie jest zainstalowany."
 [ -d ".venv" ] || fail "Brak środowiska Python (.venv). Uruchom najpierw instalację (zobacz README)."
 
