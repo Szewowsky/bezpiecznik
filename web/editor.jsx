@@ -411,9 +411,20 @@ function InputPanel({ text, onChange, onSampleLoad, onRedact, isLoading, hasReda
 }
 
 // ── OutputPanel ─────────────────────────────────────────────────────────────
-function OutputPanel({ originalText, spans, totalDetections, mode, setMode, hiddenLabels, hoveredId, setHoveredId, theme, onCopy, onDownload, copyState, isLoading, error, hasRedaction }) {
+function OutputPanel({ originalText, spans, totalDetections, mode, setMode, hiddenLabels, hoveredId, setHoveredId, theme, onCopy, onDownload, copyState, isLoading, error, hasRedaction, finalText, editedText, onEditChange, onResetEdits }) {
   const segments = useMemo(() => buildSegments(originalText, spans), [originalText, spans]);
   const allHidden = hasRedaction && (totalDetections || 0) > 0 && spans.length === 0;
+  const hasEdits = editedText !== null;
+  const editTextareaRef = useRef(null);
+
+  // Auto-init editedText przy wejściu w edit mode
+  useEffect(() => {
+    if (mode === "edit" && !hasEdits && hasRedaction) {
+      onEditChange(finalText);
+      setTimeout(() => editTextareaRef.current?.focus(), 0);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
 
   // Tekst do wyświetlenia w trybie "redacted"
   const renderRedacted = () => (
@@ -480,11 +491,21 @@ function OutputPanel({ originalText, spans, totalDetections, mode, setMode, hidd
             <button
               className={mode === "redacted" ? "seg-active" : ""}
               onClick={() => setMode("redacted")}
+              disabled={!hasRedaction}
             >Zamaskowany</button>
             <button
               className={mode === "highlight" ? "seg-active" : ""}
               onClick={() => setMode("highlight")}
+              disabled={!hasRedaction}
             >Z podświetleniem</button>
+            <button
+              className={mode === "edit" ? "seg-active" : ""}
+              onClick={() => setMode("edit")}
+              disabled={!hasRedaction}
+              title={!hasRedaction ? "Najpierw kliknij Zamaskuj dane" : "Edytuj wynik ręcznie"}
+            >
+              <span className="ico" aria-hidden="true">✎</span> Edytuj
+            </button>
           </div>
         </div>
       </header>
@@ -520,6 +541,21 @@ function OutputPanel({ originalText, spans, totalDetections, mode, setMode, hidd
             <p>Nie wykryto żadnych danych wrażliwych.</p>
             <small>Możesz bezpiecznie wysłać oryginalny tekst.</small>
           </div>
+        ) : mode === "edit" ? (
+          <div className="edit-mode-wrap">
+            <div className="edit-mode-banner">
+              <span className="edit-mode-icon" aria-hidden="true">✎</span>
+              <span><b>Tryb edycji</b> — popraw co potrzebujesz (np. zamień nazwę firmy na <code>&lt;FIRMA_1&gt;</code>). Kopiowanie i pobieranie używa Twojej wersji.</span>
+            </div>
+            <textarea
+              ref={editTextareaRef}
+              className="output-edit-textarea"
+              value={editedText ?? finalText}
+              onChange={(e) => onEditChange(e.target.value)}
+              spellCheck={false}
+              placeholder="Edytowany tekst pojawi się tutaj..."
+            />
+          </div>
         ) : (
           <>
             {mode === "highlight" && (
@@ -533,20 +569,33 @@ function OutputPanel({ originalText, spans, totalDetections, mode, setMode, hidd
         )}
       </div>
 
-      {spans.length > 0 && !isLoading && (
+      {(spans.length > 0 || hasEdits) && !isLoading && (
         <footer className="panel-foot">
           <div className="meta">
             <span><b>{spans.length}</b> {spans.length === 1 ? "zmiana" : spans.length < 5 ? "zmiany" : "zmian"}</span>
             <span className="sep">·</span>
             <span>{new Set(spans.map(s => s.placeholder)).size} unikalnych etykiet</span>
+            {hasEdits && (
+              <>
+                <span className="sep">·</span>
+                <span className="edit-badge" title="Tekst został edytowany ręcznie">
+                  <span className="ico" aria-hidden="true">✎</span> ręcznie edytowano
+                </span>
+                <button className="link-btn" onClick={onResetEdits} title="Cofnij edycje i wróć do auto wersji">
+                  resetuj
+                </button>
+              </>
+            )}
           </div>
           <div className="foot-actions">
             <button className="btn-ghost" onClick={onDownload}>
               <span className="ico">↧</span> Pobierz .md
             </button>
-            <button className="btn-primary" onClick={onCopy} title="Zawsze kopiuje wersję zamaskowaną — niezależnie od trybu podglądu">
+            <button className="btn-primary" onClick={onCopy} title={hasEdits ? "Kopiuje Twoją edytowaną wersję" : "Zawsze kopiuje wersję zamaskowaną — niezależnie od trybu podglądu"}>
               {copyState === "copied" ? (
-                <><span className="ico">✓</span> Skopiowano (bezpieczne)</>
+                <><span className="ico">✓</span> Skopiowano</>
+              ) : hasEdits ? (
+                <><span className="ico">⎘</span> Kopiuj edytowane</>
               ) : (
                 <><span className="ico">⎘</span> Kopiuj zamaskowane</>
               )}

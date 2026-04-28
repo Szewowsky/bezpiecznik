@@ -60,6 +60,8 @@ function App() {
   const [sessionStats, setSessionStats] = useStateApp({ runs: 0, masked: 0 });
   const [warningDismissed, setWarningDismissed] = useStateApp(false);
   const [error, setError] = useStateApp(null);
+  const [editedText, setEditedText] = useStateApp(null); // null = no manual edits, string = override
+  const [pendingDestroyEdits, setPendingDestroyEdits] = useStateApp(null); // { kind: 'label'|'placeholder', target: string }
 
   // Theme propaguj na <html>
   useEffectApp(() => {
@@ -78,6 +80,7 @@ function App() {
     setHasRedaction(false);
     setSpans([]);
     setError(null);
+    setEditedText(null);
   }
 
   async function runRedaction() {
@@ -86,6 +89,7 @@ function App() {
     setHasRedaction(false);
     setHoveredId(null);
     setError(null);
+    setEditedText(null);
 
     try {
       const res = await fetch("/api/redact", {
@@ -126,16 +130,44 @@ function App() {
     }
   }
 
-  function toggleLabel(label) {
+  function _applyToggleLabel(label) {
     const next = new Set(hiddenLabels);
     if (next.has(label)) next.delete(label); else next.add(label);
     setHiddenLabels(next);
   }
 
-  function togglePlaceholder(placeholder) {
+  function _applyTogglePlaceholder(placeholder) {
     const next = new Set(unmaskedPlaceholders);
     if (next.has(placeholder)) next.delete(placeholder); else next.add(placeholder);
     setUnmaskedPlaceholders(next);
+  }
+
+  function toggleLabel(label) {
+    if (editedText !== null) {
+      setPendingDestroyEdits({ kind: "label", target: label });
+    } else {
+      _applyToggleLabel(label);
+    }
+  }
+
+  function togglePlaceholder(placeholder) {
+    if (editedText !== null) {
+      setPendingDestroyEdits({ kind: "placeholder", target: placeholder });
+    } else {
+      _applyTogglePlaceholder(placeholder);
+    }
+  }
+
+  function confirmDestroyEdits() {
+    const p = pendingDestroyEdits;
+    setEditedText(null);
+    setPendingDestroyEdits(null);
+    if (p?.kind === "label") _applyToggleLabel(p.target);
+    else if (p?.kind === "placeholder") _applyTogglePlaceholder(p.target);
+  }
+
+  function cancelDestroyEdits() {
+    setPendingDestroyEdits(null);
   }
 
   function isVisibleSpan(s) {
@@ -157,21 +189,32 @@ function App() {
     return out;
   }, [hasRedaction, originalText, spans, hiddenLabels, unmaskedPlaceholders]);
 
+  // Effective text — preferuje ręczne edycje, fallback do auto finalText
+  const effectiveText = editedText !== null ? editedText : finalText;
+
   function copyToClipboard() {
-    navigator.clipboard.writeText(finalText).then(() => {
+    navigator.clipboard.writeText(effectiveText).then(() => {
       setCopyState("copied");
       setTimeout(() => setCopyState("idle"), 1800);
     }).catch(() => setCopyState("idle"));
   }
 
   function downloadFile() {
-    const blob = new Blob([finalText], { type: "text/markdown" });
+    const blob = new Blob([effectiveText], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = "tekst_zamaskowany.md";
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function resetEdits() {
+    setEditedText(null);
+  }
+
+  function handleEditChange(newText) {
+    setEditedText(newText);
   }
 
   return (
@@ -211,6 +254,10 @@ function App() {
           isLoading={isLoading}
           error={error}
           hasRedaction={hasRedaction}
+          finalText={finalText}
+          editedText={editedText}
+          onEditChange={handleEditChange}
+          onResetEdits={resetEdits}
         />
         <DetectionPanel
           spans={hasRedaction ? spans : []}
@@ -223,6 +270,12 @@ function App() {
           theme={t.theme}
         />
       </main>
+
+      <DestroyEditsDialog
+        pending={pendingDestroyEdits}
+        onConfirm={confirmDestroyEdits}
+        onCancel={cancelDestroyEdits}
+      />
 
       <Footer theme={t.theme} />
 
@@ -357,6 +410,50 @@ function Footer() {
         <span>Działa w pełni offline</span>
       </div>
     </footer>
+  );
+}
+
+// ── Destroy edits confirm dialog ───────────────────────────────────────────
+function DestroyEditsDialog({ pending, onConfirm, onCancel }) {
+  const dialogRef = React.useRef(null);
+  const cancelBtnRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const dlg = dialogRef.current;
+    if (!dlg) return;
+    if (pending && !dlg.open) {
+      dlg.showModal();
+      setTimeout(() => cancelBtnRef.current?.focus(), 0);
+    } else if (!pending && dlg.open) {
+      dlg.close();
+    }
+  }, [pending]);
+
+  const targetText = pending?.kind === "label"
+    ? `kategorii ${pending.target}`
+    : `wystąpienia ${pending?.target ?? ""}`;
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="confirm-dialog"
+      onCancel={(e) => { e.preventDefault(); onCancel(); }}
+      onClick={(e) => { if (e.target === dialogRef.current) onCancel(); }}
+    >
+      <h3>Nadpisać ręczne edycje?</h3>
+      <p>
+        Edytowałeś tekst ręcznie. Zmiana {targetText} nadpisze Twoje edycje
+        i wróci do wersji automatycznej.
+      </p>
+      <div className="dialog-actions">
+        <button ref={cancelBtnRef} className="btn-ghost" onClick={onCancel}>
+          Anuluj
+        </button>
+        <button className="btn-primary" onClick={onConfirm}>
+          Nadpisz edycje
+        </button>
+      </div>
+    </dialog>
   );
 }
 
