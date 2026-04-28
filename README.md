@@ -271,7 +271,15 @@ Etykiety polskie: `OSOBA, EMAIL, TELEFON, ADRES, URL, DATA, SEKRET, IBAN, NIP, P
 
 ### License
 
-TBD (start private). Privacy Filter sam jest Apache 2.0.
+**[PolyForm Noncommercial License 1.0.0](LICENSE)** - open-source dla użytku osobistego, edukacyjnego, badawczego i hobbystycznego.
+
+**Co możesz:** używać, czytać kod, modyfikować, dystrybuować, kontrybuować - za darmo, w nieograniczonym zakresie, dla **niekomercyjnych** zastosowań.
+
+**Czego nie możesz:** używać w komercyjnych produktach, sprzedawać, oferować jako płatną usługę bez osobnej licencji.
+
+**Komercyjne użycie?** Napisz do mnie - [LinkedIn](https://linkedin.com/in/szewowsky). Dual-license możliwy (np. dla agencji, kursów, hosted SaaS).
+
+**Third-party deps:** OpenAI Privacy Filter jest pod Apache 2.0 - nie modyfikujemy go, używamy jako dependency. Pełen list w `LICENSE` w sekcji THIRD-PARTY.
 
 ---
 
