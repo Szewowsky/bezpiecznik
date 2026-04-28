@@ -311,7 +311,7 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
   flex: 0 1 auto;
   min-width: 0;
   color: var(--fg-mute);
-  max-width: 980px;
+  max-width: 1400px;
 }
 .warn-strip .warn-text b { color: var(--fg); font-weight: 600; }
 .warn-strip > button {

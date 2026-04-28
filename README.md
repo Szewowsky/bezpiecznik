@@ -70,15 +70,13 @@ Jeśli widzisz błąd, macOS sam zaproponuje instalację - kliknij **Install** w
 
 ### Krok 4: Pobierz Bezpiecznika
 
-Wklej w Terminalu (zastąp `<URL>` adresem repozytorium, który dał Ci autor):
+Wklej w Terminalu:
 
 ```bash
 cd ~/Documents
-git clone <URL> bezpiecznik
+git clone https://github.com/Szewowsky/privacy-tool.git bezpiecznik
 cd bezpiecznik
 ```
-
-Jeśli pyta o login do GitHub - zaloguj się (lub poproś autora o dostęp do repo).
 
 ### Krok 5: Zainstaluj zależności
 
