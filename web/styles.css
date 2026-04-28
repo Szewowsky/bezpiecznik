@@ -930,27 +930,31 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: color-mix(in oklch, var(--accent) 14%, transparent);
+  white-space: nowrap;
   color: var(--accent-fg);
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 500;
-  border: 1px solid color-mix(in oklch, var(--accent) 30%, transparent);
+  letter-spacing: 0.01em;
 }
-.edit-badge .ico { font-size: 10px; }
+.edit-badge .ico {
+  font-size: 11px;
+  color: var(--accent);
+  line-height: 1;
+}
 .link-btn {
   background: transparent;
   border: 0;
   padding: 0;
-  margin-left: 6px;
+  margin-left: 4px;
   color: var(--fg-dim);
   text-decoration: underline;
   text-decoration-color: var(--fg-dim);
+  text-underline-offset: 2px;
   cursor: pointer;
   font-size: 11px;
   font-family: inherit;
   transition: var(--transition);
+  white-space: nowrap;
 }
 .link-btn:hover { color: var(--accent-fg); }
 
