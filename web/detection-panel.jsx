@@ -2,7 +2,7 @@
 
 const { useMemo: useMemoDP } = React;
 
-function DetectionPanel({ spans, hiddenLabels, toggleLabel, hoveredId, setHoveredId, theme }) {
+function DetectionPanel({ spans, hiddenLabels, toggleLabel, unmaskedPlaceholders, togglePlaceholder, hoveredId, setHoveredId, theme }) {
   // Grupuj per label
   const grouped = useMemoDP(() => {
     const m = new Map();
@@ -15,6 +15,8 @@ function DetectionPanel({ spans, hiddenLabels, toggleLabel, hoveredId, setHovere
   }, [spans]);
 
   const total = spans.length;
+  const hasUnmaskFn = typeof togglePlaceholder === "function";
+  const unmaskedSet = unmaskedPlaceholders || new Set();
 
   return (
     <aside className="detect-panel">
@@ -26,7 +28,7 @@ function DetectionPanel({ spans, hiddenLabels, toggleLabel, hoveredId, setHovere
         <p className="detect-sub">
           {total === 0
             ? "Po analizie zobaczysz tu listę wykrytych danych pogrupowaną wg kategorii."
-            : "Klikaj kategorie żeby je włączyć/wyłączyć w wyniku po prawej."}
+            : "Kropka po prawej: kategorię (przy nagłówku) lub konkretne wystąpienie (przy linii)."}
         </p>
       </header>
 
@@ -56,10 +58,11 @@ function DetectionPanel({ spans, hiddenLabels, toggleLabel, hoveredId, setHovere
                 {items.map((s, i) => {
                   const id = `${s.start}-${s.end}`;
                   const isH = hoveredId === id;
+                  const isUnmasked = unmaskedSet.has(s.placeholder);
                   return (
                     <li
                       key={i}
-                      className={`detect-item ${isH ? "is-hover" : ""}`}
+                      className={`detect-item ${isH ? "is-hover" : ""} ${isUnmasked ? "is-unmasked" : ""}`}
                       onMouseEnter={() => setHoveredId(id)}
                       onMouseLeave={() => setHoveredId(null)}
                     >
@@ -69,6 +72,16 @@ function DetectionPanel({ spans, hiddenLabels, toggleLabel, hoveredId, setHovere
                       <span className={`detect-source detect-source-${s.source}`} title={s.source === "regex" ? "wykryte regex'em (deterministyczne)" : "wykryte modelem AI"}>
                         {s.source === "regex" ? "regex" : "AI"}
                       </span>
+                      {hasUnmaskFn && (
+                        <button
+                          className={`detect-item-toggle ${isUnmasked ? "is-off" : ""}`}
+                          onClick={(e) => { e.stopPropagation(); togglePlaceholder(s.placeholder); }}
+                          aria-label={isUnmasked ? `Maskuj ${s.placeholder}` : `Pokaż oryginał ${s.placeholder}`}
+                          title={isUnmasked ? `Włącz maskowanie ${s.placeholder}` : `Pokaż oryginał (${s.placeholder} bez maski)`}
+                        >
+                          {isUnmasked ? "○" : "●"}
+                        </button>
+                      )}
                     </li>
                   );
                 })}

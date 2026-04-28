@@ -52,6 +52,7 @@ function App() {
   const [originalText, setOriginalText] = useStateApp("");
   const [spans, setSpans] = useStateApp([]);
   const [hiddenLabels, setHiddenLabels] = useStateApp(new Set());
+  const [unmaskedPlaceholders, setUnmaskedPlaceholders] = useStateApp(new Set());
   const [hoveredId, setHoveredId] = useStateApp(null);
   const [outputMode, setOutputMode] = useStateApp(t.outputMode || "redacted");
   const [copyState, setCopyState] = useStateApp("idle");
@@ -131,10 +132,20 @@ function App() {
     setHiddenLabels(next);
   }
 
+  function togglePlaceholder(placeholder) {
+    const next = new Set(unmaskedPlaceholders);
+    if (next.has(placeholder)) next.delete(placeholder); else next.add(placeholder);
+    setUnmaskedPlaceholders(next);
+  }
+
+  function isVisibleSpan(s) {
+    return !hiddenLabels.has(s.label) && !unmaskedPlaceholders.has(s.placeholder);
+  }
+
   // Tekst wynikowy do kopiowania (z aktualnym filtrowaniem)
   const finalText = useMemoApp(() => {
     if (!hasRedaction) return "";
-    const visible = spans.filter((s) => !hiddenLabels.has(s.label));
+    const visible = spans.filter(isVisibleSpan);
     let out = "";
     let cursor = 0;
     for (const s of visible) {
@@ -144,7 +155,7 @@ function App() {
     }
     out += originalText.slice(cursor);
     return out;
-  }, [hasRedaction, originalText, spans, hiddenLabels]);
+  }, [hasRedaction, originalText, spans, hiddenLabels, unmaskedPlaceholders]);
 
   function copyToClipboard() {
     navigator.clipboard.writeText(finalText).then(() => {
@@ -186,7 +197,8 @@ function App() {
         />
         <OutputPanel
           originalText={originalText || text}
-          spans={hasRedaction ? spans.filter((s) => !hiddenLabels.has(s.label)) : []}
+          spans={hasRedaction ? spans.filter(isVisibleSpan) : []}
+          totalDetections={hasRedaction ? spans.length : 0}
           mode={outputMode}
           setMode={setOutputMode}
           hiddenLabels={hiddenLabels}
@@ -204,6 +216,8 @@ function App() {
           spans={hasRedaction ? spans : []}
           hiddenLabels={hiddenLabels}
           toggleLabel={toggleLabel}
+          unmaskedPlaceholders={unmaskedPlaceholders}
+          togglePlaceholder={togglePlaceholder}
           hoveredId={hoveredId}
           setHoveredId={setHoveredId}
           theme={t.theme}

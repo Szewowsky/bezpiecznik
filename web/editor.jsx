@@ -411,8 +411,9 @@ function InputPanel({ text, onChange, onSampleLoad, onRedact, isLoading, hasReda
 }
 
 // ── OutputPanel ─────────────────────────────────────────────────────────────
-function OutputPanel({ originalText, spans, mode, setMode, hiddenLabels, hoveredId, setHoveredId, theme, onCopy, onDownload, copyState, isLoading, error, hasRedaction }) {
+function OutputPanel({ originalText, spans, totalDetections, mode, setMode, hiddenLabels, hoveredId, setHoveredId, theme, onCopy, onDownload, copyState, isLoading, error, hasRedaction }) {
   const segments = useMemo(() => buildSegments(originalText, spans), [originalText, spans]);
+  const allHidden = hasRedaction && (totalDetections || 0) > 0 && spans.length === 0;
 
   // Tekst do wyświetlenia w trybie "redacted"
   const renderRedacted = () => (
@@ -506,6 +507,12 @@ function OutputPanel({ originalText, spans, mode, setMode, hiddenLabels, hovered
             <div className="empty-glyph">⌘</div>
             <p>Tutaj pojawi się Twój tekst z zamaskowanymi danymi.</p>
             <small>Wklej coś po lewej i kliknij <b>Zamaskuj dane</b>.</small>
+          </div>
+        ) : allHidden ? (
+          <div className="output-empty">
+            <div className="empty-glyph empty-glyph-warn">⊘</div>
+            <p>Wszystkie wykryte dane są ukryte.</p>
+            <small>Włącz kategorie w panelu <b>Wykryte dane</b> po prawej, żeby zobaczyć zamaskowany tekst.</small>
           </div>
         ) : spans.length === 0 ? (
           <div className="output-empty">
