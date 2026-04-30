@@ -32,19 +32,21 @@ IBAN_PL = re.compile(
     re.IGNORECASE,
 )
 
-# NIP — wymaga kontekstu (słowo "NIP" do 20 znaków przed liczbą, żeby objąć
-# polskie frazy: "NIP: X", "NIP X", "Mój nip to X", "NIP firmy wynosi X").
+# NIP — wymaga kontekstu (słowo "NIP" do 60 znaków przed liczbą, żeby objąć
+# polskie frazy: "NIP: X", "NIP X", "Mój nip to X", "NIP firmy XYZ sp. z o.o.: X").
 # Liberalnie łapie ciąg cyfr/separatorów po słowie kluczowym (8-15 znaków),
 # potem walidacja digit-count (8-11 cyfr — poprawny NIP = 10, tolerancja typos).
+# Włączono nawiasy/parens () w klasie znaków, by łapać "NIP firmy (Brandbox sp. z o.o.):".
 NIP_WITH_CONTEXT = re.compile(
-    r"\bNIP[\w\s:.,/-]{1,20}?((?:PL\s?)?[\d][\d\s-]{6,14}[\d])\b",
+    r"\bNIP[\w\s:.,/()\-]{1,60}?((?:PL\s?)?[\d][\d\s-]{6,14}[\d])\b",
     re.IGNORECASE,
 )
 
-# PESEL — wymaga kontekstu "PESEL" (do 30 znaków przed, np. "PESEL do faktury:").
+# PESEL — wymaga kontekstu "PESEL" (do 60 znaków przed, np. "PESEL klienta (potrzebny do umowy):").
 # Tolerancja typos: 8-12 cyfr (poprawny PESEL ma 11).
+# Włączono nawiasy/parens () w klasie znaków, by łapać polskie frazy z dopiskami.
 PESEL_WITH_CONTEXT = re.compile(
-    r"\bPESEL[\w\s:.,/-]{1,30}?(\d{8,12})\b",
+    r"\bPESEL[\w\s:.,/()\-]{1,60}?(\d{8,12})\b",
     re.IGNORECASE,
 )
 
