@@ -118,6 +118,22 @@ http://localhost:8000
 
 Zobaczysz Bezpiecznika. **Pierwszy raz**, gdy klikniesz "Zamaskuj dane", aplikacja pobiera model AI (~3 GB, jednorazowo). Potrwa to **~50 sekund**. Każde następne maskowanie jest natychmiastowe.
 
+### Krok 8 (opcjonalny): Skrót w terminalu
+
+Żeby nie wpisywać za każdym razem długiej komendy `.venv/bin/uvicorn server:app --port 8000`, możesz dodać skrót. W Terminalu (w katalogu `bezpiecznik`):
+
+```bash
+./install-alias.sh
+```
+
+Skrypt sam wykryje Twój shell (zsh/bash) i doda alias. Po przeładowaniu terminala (`source ~/.zshrc` albo nowe okno) wystarczy wpisać:
+
+```bash
+bezpiecznik
+```
+
+i aplikacja wystartuje. To wszystko - jedno słowo zamiast dwóch ścieżek.
+
 ---
 
 ## Jak korzystać
@@ -147,7 +163,9 @@ W panelu po prawej przełącz na **Z podświetleniem** - zobaczysz oryginał z k
 
 Wracając do Terminala (gdzie chodzi serwer), naciśnij `Ctrl + C` żeby zatrzymać aplikację.
 
-Następnym razem - krok 6 i 7 (pomijasz instalację).
+Następnym razem:
+- Jeśli zainstalowałeś alias (Krok 8) - wystarczy `bezpiecznik` w terminalu
+- Bez aliasu - krok 6 i 7 (pomijasz instalację)
 
 ---
 
@@ -235,6 +253,7 @@ bezpiecznik/
 ├── test_pii_regex.py   55 testów (regex layer)
 ├── test_server.py      21 testów (API contract + dedup + reklasyfikacja)
 ├── update.sh           Skrypt aktualizacji dla nietechnicznych
+├── install-alias.sh    Dodaje alias `bezpiecznik` do shell rc (zsh/bash)
 └── web/                Frontend Bezpiecznik
     ├── index.html
     ├── styles.css      3 motywy (minimal-dark / terminal / light)
