@@ -329,6 +329,26 @@ def test_alias_helpers_unit():
     # Kolejność tokenów ma znaczenie (subsequence != subset)
     assert ps._is_alias_of("Kowalski Marek", "Marek Kowalski") is False
 
+    # Phase 2.1b: PL fleksja w aliasingu
+    # Identyczne po normalize — False (caller exact-match path)
+    assert ps._is_alias_of("Pawłem Górskim", "Paweł Górski") is False
+    # Single-token alias single→multi po normalize
+    assert ps._is_alias_of("Paweł", "Pawłem Górskim") is True
+    # Różne formy fleksyjne tego samego imienia
+    assert ps._is_alias_of("Pawła", "Pawłem Górskim") is True
+    # Negative: różne osoby - "Anna" alias "Marek Kowalski"
+    assert ps._is_alias_of("Anna", "Marek Kowalski") is False
+    # Surname-only single token nie jest alias (pos 0 - bez surname rules)
+    # 'Górskim' jako pos 0 token zostaje 'górskim', więc subsequence
+    # ['górskim'] in ['paweł', 'górski'] → False (różne stringi)
+    assert ps._is_alias_of("Górskim", "Paweł Górski") is False
+
+    # Normalize sanity przez _normalize_for_match
+    assert ps._normalize_for_match("Pawłem Górskim") == "paweł górski"
+    assert ps._normalize_for_match("Paweł Górski") == "paweł górski"
+    assert ps._normalize_for_match("Marii Skłodowskiej") == "maria skłodowska"
+    assert ps._normalize_for_match("Anna Nowak") == "anna nowak"
+
 
 # ── Phase 2.1a integration tests — Polish flexion detection ─────────────
 
@@ -413,3 +433,142 @@ def test_phase2_1a_priority_opf_wins_overlap(monkeypatch):
     # Tylko 1 detection (OPF), nie 2 (OPF + regex_pl duplikat)
     assert len(osoby) == 1, f"Duplicate detection. Got: {osoby}"
     assert osoby[0]["source"] == "model"  # OPF wygrał, nie regex
+
+
+# ── Phase 2.1b integration tests — Polish flexion ALIASING ──────────────
+
+
+def test_alias_phase2_1b_pawlem_pawel_gorski(monkeypatch):
+    """Phase 2.1b: 'Pawłem Górskim' (regex_pl) i 'Paweł Górski' (OPF mianownik)
+    → ten sam <OSOBA_1>. Po normalize oba dają 'paweł górski'."""
+    fake_spans = [
+        {"label": "private_person", "start": 0, "end": 12, "text": "Paweł Górski",
+         "placeholder": "<P>", "confidence": 0.9},
+    ]
+    pii_service = _mock_opf_with_spans(monkeypatch, fake_spans)
+    text = "Paweł Górski przyszedł. Wczoraj rozmawiałem z Pawłem Górskim."
+    result = pii_service.redact_text(text)
+    osoby = [d["placeholder"] for d in result["detections"] if d["label"] == "OSOBA"]
+    assert osoby == ["<OSOBA_1>", "<OSOBA_1>"], f"Got: {osoby}"
+
+
+def test_alias_phase2_1b_pawel_alone_alias(monkeypatch):
+    """Phase 2.1b livestream case: sam 'Paweł' (OPF) alias 'Pawłem Górskim'
+    (regex_pl) → ten sam <OSOBA_1>. Z [00:32] 'Paweł, opowiedz...'
+
+    Single-token alias single→multi po normalize:
+    'paweł' jest subsequence ['paweł', 'górski'] → True.
+    """
+    fake_spans = [
+        {"label": "private_person", "start": 0, "end": 5, "text": "Paweł",
+         "placeholder": "<P>", "confidence": 0.85},
+    ]
+    pii_service = _mock_opf_with_spans(monkeypatch, fake_spans)
+    text = "Paweł xxx Pawłem Górskim"
+    result = pii_service.redact_text(text)
+    osoby = [d["placeholder"] for d in result["detections"] if d["label"] == "OSOBA"]
+    # OPF łapie sam "Paweł", regex_pl łapie "Pawłem Górskim", alias = ten sam id
+    assert len(set(osoby)) == 1, f"Expected single placeholder, got: {osoby}"
+
+
+def test_alias_phase2_1b_skłodowska_genitive(monkeypatch):
+    """Phase 2.1b: 'Marii Skłodowskiej' (dopełniacz) alias 'Maria Skłodowska'
+    (mianownik). Po normalize obie dają 'maria skłodowska'."""
+    fake_spans = [
+        {"label": "private_person", "start": 0, "end": 16, "text": "Maria Skłodowska",
+         "placeholder": "<P>", "confidence": 0.9},
+        {"label": "private_person", "start": 22, "end": 40, "text": "Marii Skłodowskiej",
+         "placeholder": "<P>", "confidence": 0.9},
+    ]
+    pii_service = _mock_opf_with_spans(monkeypatch, fake_spans)
+    text = "Maria Skłodowska xxxxx Marii Skłodowskiej"
+    result = pii_service.redact_text(text)
+    osoby = [d["placeholder"] for d in result["detections"] if d["label"] == "OSOBA"]
+    assert osoby == ["<OSOBA_1>", "<OSOBA_1>"], f"Got: {osoby}"
+
+
+def test_alias_phase2_1b_no_collision_anna_ann(monkeypatch):
+    """Phase 2.1b sanity (Codex P0): 'Ann' (nie w whitelist) NIE alias 'Anna'
+    (whitelist). Stripping by dał 'Ann' i 'Ann' → fałszywie alias.
+    Whitelist normalize zachowuje 'ann' bez zmian, 'anna' zostaje 'anna'.
+    """
+    fake_spans = [
+        {"label": "private_person", "start": 0, "end": 10, "text": "Anna Nowak",
+         "placeholder": "<P>", "confidence": 0.9},
+        {"label": "private_person", "start": 16, "end": 25, "text": "Ann Smith",
+         "placeholder": "<P>", "confidence": 0.85},
+    ]
+    pii_service = _mock_opf_with_spans(monkeypatch, fake_spans)
+    text = "Anna Nowak xxxx Ann Smith"
+    result = pii_service.redact_text(text)
+    osoby = [d["placeholder"] for d in result["detections"] if d["label"] == "OSOBA"]
+    assert len(set(osoby)) == 2, f"Anna i Ann to różni ludzie. Got: {osoby}"
+
+
+def test_alias_phase2_1b_kowalski_brothers(monkeypatch):
+    """Phase 2.1b sanity: 'Marek Kowalski' i 'Anna Kowalska' to różne osoby
+    (różne rodzaje), pomimo że nazwiska są podobne. Po normalize
+    'kowalski' vs 'kowalska' są różne tokeny."""
+    fake_spans = [
+        {"label": "private_person", "start": 0, "end": 14, "text": "Marek Kowalski",
+         "placeholder": "<P>", "confidence": 0.9},
+        {"label": "private_person", "start": 20, "end": 33, "text": "Anna Kowalska",
+         "placeholder": "<P>", "confidence": 0.9},
+    ]
+    pii_service = _mock_opf_with_spans(monkeypatch, fake_spans)
+    text = "Marek Kowalski xxxxx Anna Kowalska"
+    result = pii_service.redact_text(text)
+    osoby = [d["placeholder"] for d in result["detections"] if d["label"] == "OSOBA"]
+    assert len(set(osoby)) == 2, f"Got: {osoby}"
+
+
+def test_alias_phase2_1b_pawel_homonym_ambiguous(monkeypatch):
+    """Phase 2.1b sanity (Codex P0 #4): 'Paweł Kowalski' + 'Paweł Nowak' +
+    sam 'Paweł'. Samotny 'Paweł' matchuje OBIE Pawły (ambiguous match),
+    więc dostaje osobny <OSOBA_3> przez uniqueness check (Codex 7 fix).
+
+    Phase 2.1b NIE zmienia tego kontraktu - PL fleksja respektuje uniqueness."""
+    fake_spans = [
+        {"label": "private_person", "start": 0, "end": 14, "text": "Paweł Kowalski",
+         "placeholder": "<P>", "confidence": 0.9},
+        {"label": "private_person", "start": 20, "end": 31, "text": "Paweł Nowak",
+         "placeholder": "<P>", "confidence": 0.9},
+        {"label": "private_person", "start": 37, "end": 42, "text": "Paweł",
+         "placeholder": "<P>", "confidence": 0.85},
+    ]
+    pii_service = _mock_opf_with_spans(monkeypatch, fake_spans)
+    text = "Paweł Kowalski xxxxx Paweł Nowak xxxxx Paweł"
+    result = pii_service.redact_text(text)
+    osoby = [d["placeholder"] for d in result["detections"] if d["label"] == "OSOBA"]
+    # 3 unique placeholders! Sam "Paweł" nie wie do którego należy → osobny
+    assert len(set(osoby)) == 3, f"Got: {osoby}"
+
+
+def test_alias_phase2_1b_hyphenated_inflected(monkeypatch):
+    """Phase 2.1b: hyphenated surname po odmianie. 'Górskim-Kowalskim'
+    (narzędnik dwuczłonowego) alias 'Górski-Kowalski' (mianownik).
+
+    Tokenizacja na separatorze '-' daje ['górskim', 'kowalskim'] vs
+    ['górski', 'kowalski']. Per-position normalize: pos 0 ('górskim' nie
+    w whitelist) zostaje, pos 1 ('kowalskim'→'kowalski') normalized.
+    Hmm to nie zadziała perfectly bo pos 0 nazwiska po hyphen w drugiej
+    pozycji multi-tokenowego tekstu...
+
+    Faktycznie tekst 'Pan Jan Górskim-Kowalskim' tokenizuje na
+    ['pan','jan','górskim','kowalskim']. Po stripie greetingu 'pan' →
+    ['jan','górskim','kowalskim']. Pos 0='jan' (lookup), pos 1='górskim'
+    (regex 'skim$'→'ski'), pos 2='kowalskim' (regex). Wynik:
+    ['jan','górski','kowalski']. Match z 'Jan Górski-Kowalski' →
+    ['jan','górski','kowalski']. ✅
+    """
+    fake_spans = [
+        {"label": "private_person", "start": 0, "end": 19, "text": "Jan Górski-Kowalski",
+         "placeholder": "<P>", "confidence": 0.9},
+        {"label": "private_person", "start": 25, "end": 47, "text": "Janem Górskim-Kowalskim",
+         "placeholder": "<P>", "confidence": 0.85},
+    ]
+    pii_service = _mock_opf_with_spans(monkeypatch, fake_spans)
+    text = "Jan Górski-Kowalski xxxxx Janem Górskim-Kowalskim"
+    result = pii_service.redact_text(text)
+    osoby = [d["placeholder"] for d in result["detections"] if d["label"] == "OSOBA"]
+    assert osoby == ["<OSOBA_1>", "<OSOBA_1>"], f"Got: {osoby}"

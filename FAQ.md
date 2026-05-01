@@ -22,7 +22,9 @@ Czasem przegapia:
 - imiona spoza listy 50 najpopularniejszych w Polsce (np. egzotyczne lub archaiczne)
 - nietypowe formy odmiany (np. archaiczne wołacze - "Pawle!" jako wezwanie)
 - same nazwy miast bez kontekstu (np. samo "Warszawa")
-- alias dedup ten samej osoby w różnych formach (np. "Paweł" i "Pawłem Górskim" mogą trafić do osobnych placeholderów - fix w przyszłej wersji)
+- samotne imiona bez nazwiska w niektórych kontekstach - OPF czasem pomija ("Paweł, opowiedz..." jako zwrot do osoby)
+
+**Trade-off Phase 2.1b (alias dedup):** dla różnych osób o tym samym imieniu BEZ nazwiska (np. dwóch Pawłów w jednym tekście, jeden bez nazwiska) narzędzie świadomie zostawia osobne placeholdery zamiast ryzykować scalenie. To wybór "lepiej osobno niż błędnie razem".
 
 Właśnie dlatego po każdym maskowaniu **sprawdź wynik wzrokowo** - tryb "Z podświetleniem" pomaga.
 

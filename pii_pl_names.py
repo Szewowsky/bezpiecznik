@@ -1,16 +1,18 @@
 """
-Polski słownik PERSON gating + ORG/brand blocklist.
+Polski słownik PERSON gating + ORG/brand blocklist + alias normalization.
 
-Embedded data dla detection gating w `pii_regex.find_polish_inflected_persons`.
-Soft dependency: dane embedded w kodzie, zero pip install.
+Embedded data dla detection gating (Phase 2.1a) i alias normalization
+(Phase 2.1b). Soft dependency: dane embedded w kodzie, zero pip install.
 
 Iteracja: dodać imię/nazwisko/brand → edit listy → bump VERSION poniżej.
 
-Zakres v1 (2026-05-01): top-50 polskich imion (25 męskich + 25 żeńskich)
+Zakres v1.0 (2026-05-01): top-50 polskich imion (25 męskich + 25 żeńskich)
 z 4-5 najczęstszymi formami odmienionymi (mianownik + dopełniacz + celownik
-+ narzędnik + miejscownik). Imiona przedstawione w mianowniku jako klucz,
-listy odmian jako wartość. Phase 2.1b użyje reverse mappingu do canonical
-normalization w aliasingu.
++ narzędnik + miejscownik).
+
+Zakres v1.1 (2026-05-01 wieczór): per-position normalize_pl_tokens() dla
+aliasingu. Imiona = whitelist lookup (pos 0), nazwiska = regex transform
+rules dla rodzin -ski/-cki/-wicz (pos > 0).
 
 Format Pythona zamiast JSON dla:
 - importu jako moduł (zero load overhead)
@@ -18,7 +20,9 @@ Format Pythona zamiast JSON dla:
 - frozenset (immutable, fast lookup)
 """
 
-VERSION = "1.0.0"  # bump przy zmianie listy
+import re
+
+VERSION = "1.1.0"  # bump przy zmianie listy
 
 # ── Imiona męskie (mianownik). Top 25 najpopularniejszych w Polsce. ────────
 PL_FIRST_NAMES_M = frozenset({
@@ -192,3 +196,79 @@ LAST_NAME_NOMINATIVE_PATTERN = (
     r"[A-ZŁŚŻŹĆŃĄĘÓ][a-ząęółśżźćń]{2,}"
     r"(?:-[A-ZŁŚŻŹĆŃĄĘÓ][a-ząęółśżźćń]{2,})?"
 )
+
+
+# ── Phase 2.1b: alias normalization (per-position dispatch) ─────────────
+# Reverse lookup imion: lowercase forma odmieniona → lowercase mianownik.
+# Generated z PL_INFLECTED_TO_BASE na import. Używane w normalize_pl_tokens
+# żeby "pawłem" → "paweł", "anny" → "anna", "marii" → "maria".
+PL_INFLECTED_TO_BASE_LOWER = {
+    k.lower(): v.lower() for k, v in PL_INFLECTED_TO_BASE.items()
+}
+
+# Heurystyczne reguły dla nazwisk -ski/-cki/-wicz. Sortowane longest-first
+# (regex pierwszy match wygrywa).
+# Świadomie WĄSKIE - tylko najczęstsze rodziny adjektywno-fleksyjne i -wicz.
+# Nie próbujemy obsłużyć każdego polskiego nazwiska - tylko te 3 rodziny które
+# pokrywają ~70% przypadków, bez ryzyka over-match na pojedynczych tokenach.
+SURNAME_NORMALIZATION_RULES: tuple[tuple[re.Pattern, str], ...] = (
+    # Adjektywne -ski/-cki: dopełniacz/celownik/miejscownik/narzędnik (męskie)
+    (re.compile(r"skiego$"), "ski"),    # Kowalskiego → Kowalski
+    (re.compile(r"ckiego$"), "cki"),    # Mickiewickiego → Mickiewicki
+    (re.compile(r"skiemu$"), "ski"),
+    (re.compile(r"ckiemu$"), "cki"),
+    (re.compile(r"skich$"), "ski"),
+    (re.compile(r"ckich$"), "cki"),
+    (re.compile(r"skim$"), "ski"),       # Górskim → Górski
+    (re.compile(r"ckim$"), "cki"),
+    # Żeńskie -ska/-cka
+    (re.compile(r"skiej$"), "ska"),      # Skłodowskiej → Skłodowska
+    (re.compile(r"ckiej$"), "cka"),
+    (re.compile(r"ską$"), "ska"),        # Skłodowską → Skłodowska
+    (re.compile(r"cką$"), "cka"),
+    # -wicz family (męskie)
+    (re.compile(r"wiczowi$"), "wicz"),
+    (re.compile(r"wiczem$"), "wicz"),    # Mickiewiczem → Mickiewicz
+    (re.compile(r"wicza$"), "wicz"),
+    (re.compile(r"wiczu$"), "wicz"),
+)
+
+
+def normalize_pl_tokens(tokens: list[str]) -> list[str]:
+    """Per-position PL fleksja normalize na liście tokens.
+
+    Tokeny MUSZĄ być już lowercase (output `_tokenize_for_alias` z casefold).
+
+    Logika per pozycja:
+      - Pos 0 (imię): whitelist lookup `PL_INFLECTED_TO_BASE_LOWER`
+      - Pos > 0 (nazwisko): regex transform `SURNAME_NORMALIZATION_RULES`
+      - Brak match → token bez zmian
+
+    Decyzja per-position (po Codex review runda 2):
+    Surname rules NIE są stosowane na pos 0 żeby uniknąć over-match na
+    single-token spans (np. samotne "górskim" zostaje "górskim", nie
+    fałszywie matchuje z "górski").
+
+    Examples:
+      ["pawłem"] → ["paweł"]                 # imię lookup
+      ["pawłem", "górskim"] → ["paweł", "górski"]
+      ["górskim"] → ["górskim"]              # NIE stosujemy surname rules na pos 0
+      ["jan", "górskim", "kowalskim"] → ["jan", "górski", "kowalski"]
+      ["brandbox"] → ["brandbox"]            # no match
+      ["marek"] → ["marek"]                  # mianownik base, no change
+    """
+    out = []
+    for idx, token in enumerate(tokens):
+        if idx == 0:
+            # Pierwsza pozycja: imię lookup (whitelist)
+            out.append(PL_INFLECTED_TO_BASE_LOWER.get(token, token))
+        else:
+            # Kolejna pozycja: surname regex transform
+            transformed = token
+            for pattern, replacement in SURNAME_NORMALIZATION_RULES:
+                new_token, count = pattern.subn(replacement, token)
+                if count > 0:
+                    transformed = new_token
+                    break  # pierwszy match wygrywa
+            out.append(transformed)
+    return out

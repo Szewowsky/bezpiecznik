@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 
 from opf_runtime import get_model
+from pii_pl_names import normalize_pl_tokens
 from pii_regex import (
     apply_redaction,
     filter_false_person_spans,
@@ -125,27 +126,44 @@ def _strip_edge_stopwords(tokens: list[str]) -> list[str]:
 
 def _normalize_for_match(text: str) -> str:
     """
-    Tokenize → strip edge stopwords → join. Używane do exact-match porównania
-    w _assign_canonical_ids. Bezpieczne — nie wpływa na spany ani redaction.
+    Tokenize → strip edge stopwords → PL normalize per-position → join.
+
+    Phase 2.1b: dodano per-position PL fleksja normalize. "Pawłem Górskim"
+    i "Paweł Górski" oba dają "paweł górski" → exact match path łapie alias.
+
+    Bezpieczne — nie wpływa na spany ani redaction, tylko na decyzję dedupową
+    w _assign_canonical_ids.
     """
-    return " ".join(_strip_edge_stopwords(_tokenize_for_alias(text)))
+    tokens = _strip_edge_stopwords(_tokenize_for_alias(text))
+    return " ".join(normalize_pl_tokens(tokens))
 
 
 def _is_alias_of(short: str, canonical: str) -> bool:
     """
     Czy `short` to alias `canonical`?
 
-    Po stripie edge stopwordów: True gdy short jest CONTIGUOUS SUBSEQUENCE
-    canonical tokens. Subset by przepuścił 'Robert Marek' alias 'Marek Robert
-    Kowalski' (token kolejność dowolna) — subsequence wymaga kolejności.
+    Po stripie edge stopwordów + per-position PL fleksja normalize:
+    True gdy short jest CONTIGUOUS SUBSEQUENCE canonical tokens.
 
-    Identyczne (po normalizacji) → False (caller obsługuje exact-match osobno).
+    Phase 2.1b: PL fleksja normalizowana (whitelist imion + heurystyczne
+    nazwiska -ski/-cki/-wicz). "Paweł" alias "Pawłem Górskim" - po normalize
+    "paweł" jest subsequence "paweł górski" → True.
 
-    Polska fleksja ('Tomkiem' vs 'Tomek') nie jest obsługiwana — Phase 2 ze
-    spaCy / morfologicznym lemmatyzerem.
+    Subset by przepuścił 'Robert Marek' alias 'Marek Robert Kowalski' (token
+    kolejność dowolna) — subsequence wymaga kolejności.
+
+    Identyczne (po normalizacji) → False (caller obsługuje exact-match osobno
+    przez _normalize_for_match, które używa tej samej PL normalize).
+
+    Single-token alias safety: caller `_assign_canonical_ids` ma uniqueness
+    check — jeśli short matchuje >1 canonical, dostaje osobny canonical_id
+    (ambiguous → new). Phase 2.1b NIE zmienia tego kontraktu.
     """
     s = _strip_edge_stopwords(_tokenize_for_alias(short))
     c = _strip_edge_stopwords(_tokenize_for_alias(canonical))
+    # Phase 2.1b: per-position PL normalize
+    s = normalize_pl_tokens(s)
+    c = normalize_pl_tokens(c)
     if not s or not c or s == c:
         return False
     n = len(s)
