@@ -516,3 +516,154 @@ class TestFilterFalsePersonSpans:
     def test_empty_list_returns_empty(self):
         result = filter_false_person_spans([])
         assert result == [], "Empty input must return empty list"
+
+
+# ---------------------------------------------------------------------------
+# Phase 2.1a — find_polish_inflected_persons (Polish PERSON detector)
+# ---------------------------------------------------------------------------
+
+from pii_regex import find_polish_inflected_persons
+
+
+class TestPolishInflectedPersons:
+    """
+    Detector polskich imion+nazwisk z whitelist gatingiem + blocklist brandów.
+
+    Wariant A: imię odmienione + nazwisko mianownik ("Anną Nowak").
+    Wariant B: imię + nazwisko z końcówką fleksyjną ("Pawłem Górskim").
+
+    Phase 2.1a fix dla bug z livestreamu 2026-05-01: OPF model całkowicie
+    pomija polskie formy odmienione PERSON. Detector uzupełnia recall.
+    """
+
+    # --- Positive cases (powinny matchować) ---
+
+    def test_pawel_gorski_inflected_variant_b(self):
+        """Bug z livestreamu: 'Pawłem Górskim' (narzędnik m. + narzędnik nazwiska)."""
+        spans = find_polish_inflected_persons("rozmawiam z Pawłem Górskim wczoraj")
+        assert len(spans) == 1
+        assert spans[0]["text"] == "Pawłem Górskim"
+        assert spans[0]["variant"] == "B"
+        assert spans[0]["source"] == "regex_pl_inflected"
+        assert spans[0]["label"] == "private_person"
+
+    def test_anna_nowak_inflected_variant_a(self):
+        """Wariant A: imię odmienione 'Anną' + nazwisko mianownik 'Nowak'."""
+        spans = find_polish_inflected_persons("Anną Nowak spotkałem wczoraj")
+        assert len(spans) == 1
+        assert spans[0]["text"] == "Anną Nowak"
+        assert spans[0]["variant"] == "A"
+
+    def test_marek_kowalski_nominative_caught(self):
+        """Mianownik też łapany (variant A) - dedup z OPF zrobi merge."""
+        spans = find_polish_inflected_persons("Marek Kowalski przyszedł")
+        assert len(spans) == 1
+        assert spans[0]["text"] == "Marek Kowalski"
+
+    def test_hyphenated_surname(self):
+        """'Jan Górski-Kowalski' - hyphenated surname obsługiwany."""
+        spans = find_polish_inflected_persons("Pan Jan Górski-Kowalski przyszedł")
+        # Pan nie w whitelist więc 'Pan Jan' skip, ale 'Jan Górski-Kowalski' łapane.
+        assert any(s["text"] == "Jan Górski-Kowalski" for s in spans)
+
+    def test_marie_skłodowską_female_inflected(self):
+        """Żeńskie imię odmienione + nazwisko z końcówką."""
+        spans = find_polish_inflected_persons("Spotkałem Marię Skłodowską w bibliotece.")
+        assert len(spans) == 1
+        assert spans[0]["text"] == "Marię Skłodowską"
+
+    def test_robert_lewandowski_inflected(self):
+        """'Robertem Lewandowskim' - 'Robertem' jako odmiana 'Robert'."""
+        spans = find_polish_inflected_persons("z Robertem Lewandowskim wczoraj")
+        assert len(spans) == 1
+        assert spans[0]["text"] == "Robertem Lewandowskim"
+
+    def test_pawle_locative_form(self):
+        """'Pawle Górskim' - miejscownik imienia."""
+        spans = find_polish_inflected_persons("o Pawle Górskim była mowa")
+        assert len(spans) == 1
+        assert spans[0]["text"] == "Pawle Górskim"
+
+    def test_full_livestream_text(self):
+        """Pełen livestream case - 2 osoby (Anna Nowak mianownik + Pawłem Górskim)."""
+        text = (
+            "[00:14] Cześć, tu Anna Nowak z kanału Marketing Garage. "
+            "Dzisiaj rozmawiam z Pawłem Górskim, founderem startupu Brandbox."
+        )
+        spans = find_polish_inflected_persons(text)
+        found_texts = [s["text"] for s in spans]
+        assert "Anna Nowak" in found_texts
+        assert "Pawłem Górskim" in found_texts
+        assert "Marketing Garage" not in found_texts
+        assert "Sheriff Octopus" not in found_texts
+        assert "Brandbox" not in found_texts
+
+    # --- Negative cases (NIE powinny matchować) ---
+
+    def test_no_brand_marketing_garage(self):
+        spans = find_polish_inflected_persons("Marketing Garage to firma")
+        assert spans == []
+
+    def test_no_brand_sheriff_octopus(self):
+        spans = find_polish_inflected_persons("Sheriff Octopus to maskotka")
+        assert spans == []
+
+    def test_no_open_source(self):
+        spans = find_polish_inflected_persons("Open Source software is great")
+        assert spans == []
+
+    def test_no_apple_silicon(self):
+        spans = find_polish_inflected_persons("Apple Silicon procesory")
+        assert spans == []
+
+    def test_no_unknown_first_name(self):
+        """Pierwszy token nie z whitelisty (obcojęzyczne imię) - skip."""
+        spans = find_polish_inflected_persons("Xavier Martínez przyszedł")
+        assert spans == []
+
+    def test_no_context_trigger_kanal(self):
+        """Trigger 'kanał' przed sekwencją - skip."""
+        spans = find_polish_inflected_persons("kanał Marketing Garage rośnie")
+        assert spans == []
+
+    def test_no_context_trigger_startup(self):
+        """Trigger 'startupu' przed Brandbox."""
+        spans = find_polish_inflected_persons("founder startupu Brandbox")
+        assert spans == []
+
+    # --- Boundary / edge cases ---
+
+    def test_empty_text(self):
+        assert find_polish_inflected_persons("") == []
+
+    def test_single_word_no_match(self):
+        """Pojedyncze imię bez nazwiska - regex wymaga 2 tokenów."""
+        assert find_polish_inflected_persons("Paweł") == []
+        assert find_polish_inflected_persons("Pawłem") == []
+
+    def test_three_word_picks_first_pair(self):
+        """'Jan Maria Rokita' (3 tokeny) - łapie 'Jan Maria' jako pair (Maria w whitelist).
+        Phase 2.1a obsługuje 2 tokeny - 3-tokenowe rozszerzenie do Phase 2.1b."""
+        # 'Jan Maria' będzie matchowane (Maria pasuje LAST_NAME_NOMINATIVE_PATTERN).
+        # To znana limitacja - canonical_id w pii_service rozwiąże aliasing.
+        spans = find_polish_inflected_persons("Jan Maria Rokita przyszedł")
+        # Może być 'Jan Maria' lub 'Maria Rokita' lub oba
+        assert len(spans) >= 1
+
+    def test_dedup_variant_a_b_same_range(self):
+        """Mianownik Marek Kowalski - może matchować przez wariant A (Marek + Kowalski).
+        Wariant B by też matchował 'Markiem Kowalskim' ale tu mianownik. Brak dedup conflict."""
+        spans = find_polish_inflected_persons("Marek Kowalski Markiem Kowalskim")
+        # Każdy w innym rangu - 2 spany, oba różne
+        texts = [s["text"] for s in spans]
+        assert "Marek Kowalski" in texts
+        assert "Markiem Kowalskim" in texts
+        assert len(spans) == 2
+
+    def test_confidence_b_higher_than_a(self):
+        """Wariant B (nazwisko z końcówką) bardziej pewny niż A (mianownik)."""
+        text_b = "rozmawiam z Pawłem Górskim"
+        text_a = "Anną Nowak spotkałem"
+        b_span = find_polish_inflected_persons(text_b)[0]
+        a_span = find_polish_inflected_persons(text_a)[0]
+        assert b_span["confidence"] > a_span["confidence"]

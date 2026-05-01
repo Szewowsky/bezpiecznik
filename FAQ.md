@@ -19,8 +19,10 @@ Solidnie wykrywa: **osoby (imiona/nazwiska), e-maile, telefony, IBAN, NIP, PESEL
 
 Czasem przegapia:
 - nazwy firm bez sufiksów (np. "Brandbox", "Codepoint" - bo nie ma "Sp. z o.o.")
-- imiona w polskich odmianach (np. "Pawłem", "Robercie")
+- imiona spoza listy 50 najpopularniejszych w Polsce (np. egzotyczne lub archaiczne)
+- nietypowe formy odmiany (np. archaiczne wołacze - "Pawle!" jako wezwanie)
 - same nazwy miast bez kontekstu (np. samo "Warszawa")
+- alias dedup ten samej osoby w różnych formach (np. "Paweł" i "Pawłem Górskim" mogą trafić do osobnych placeholderów - fix w przyszłej wersji)
 
 Właśnie dlatego po każdym maskowaniu **sprawdź wynik wzrokowo** - tryb "Z podświetleniem" pomaga.
 

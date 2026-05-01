@@ -286,7 +286,9 @@ Etykiety polskie: `OSOBA, EMAIL, TELEFON, ADRES, URL, DATA, SEKRET, IBAN, NIP, P
 - **Phase 1** ✅ DONE (2026-04-27 rano) - Setup + Gradio MVP + 55/55 testów
 - **Phase 1.5** ✅ DONE (2026-04-27 wieczorem) - Bezpiecznik UI (FastAPI + React, 3 motywy)
 - **Phase 2 UX** ✅ DONE (2026-04-28) - Tabs paste/upload + drag&drop + dialog confirm + preview + 9 formatów
-- **Phase 2 detection** (planned) - spaCy `pl_core_news_lg` (ORG, fleksja, miasta)
+- **Phase 2.1a detection** ✅ DONE (2026-05-01) - whitelist 50 polskich imion + regex detector dla form odmienionych ("Pawłem Górskim", "Anną Nowak"), hyphenated surnames, blocklist brand tokens
+- **Phase 2.1b detection** (planned) - alias dedup tej samej osoby w różnych formach (np. "Paweł" i "Pawłem Górskim" → ten sam placeholder)
+- **Phase 3 detection** (planned) - spaCy `pl_core_news_lg` jako fallback NER backend dla ORG, miast i edge cases fleksji
 
 ### License
 

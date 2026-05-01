@@ -14,6 +14,7 @@ from pii_regex import (
     apply_redaction,
     filter_false_person_spans,
     find_pii,
+    find_polish_inflected_persons,
     merge_with_opf_spans,
     reclassify_address_persons,
 )
@@ -232,6 +233,14 @@ def redact_text(text: str) -> dict:
     opf_spans = filter_false_person_spans(opf_result["detected_spans"])
     # Reklasyfikator: 'Aleje Jerozolimskie' jako PERSON → ADRES
     opf_spans = reclassify_address_persons(opf_spans)
+
+    # Phase 2.1a: dołożony detector polskich form odmienionych imion+nazwisk.
+    # OPF nie łapie "Pawłem Górskim", "Anną Nowak" - whitelist+regex naprawia.
+    # Filter PII keywords (np. "Konta Pawłem") + reclassify (np. "ul. Marka").
+    pl_inflected = find_polish_inflected_persons(text)
+    pl_inflected = filter_false_person_spans(pl_inflected)
+    pl_inflected = reclassify_address_persons(pl_inflected)
+    opf_spans = opf_spans + pl_inflected
 
     regex_spans = find_pii(text)
     merged = merge_with_opf_spans(opf_spans, regex_spans)

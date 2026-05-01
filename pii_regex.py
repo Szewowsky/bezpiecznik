@@ -7,12 +7,26 @@ Filozofia:
 - IBAN jest bezpieczny standalone (26 cyfr to bardzo rzadki przypadek false-match)
 - Każdy match ma label kompatybilny z OPF naming (`private_account_number`)
 - Zwracamy spany w identycznym formacie jak `OPF.redact().detected_spans`
+
+Phase 2.1a (2026-05-01): dołożony detector polskich imion+nazwisk w formach
+odmienionych (`find_polish_inflected_persons`). Whitelist-gated z `pii_pl_names`,
+dwa warianty (imię odmienione + nazwisko mianownik LUB imię + nazwisko z końcówką).
+Łapie "Pawłem Górskim", "Anną Nowak", "Markiem Kowalskim" - przypadki które
+OPF model całkowicie pomija.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+
+from pii_pl_names import (
+    LAST_NAME_NOMINATIVE_PATTERN,
+    ORG_BRAND_TOKENS,
+    ORG_CONTEXT_TRIGGERS_BEFORE,
+    PL_ALL_FIRST_NAMES,
+    PL_LAST_NAME_SUFFIXES_INFLECTED,
+)
 
 
 @dataclass
@@ -72,6 +86,123 @@ ADDRESS_KEYWORDS_PREFIX = (
     "ul.", "al.", "aleje", "aleja", "plac", "pl.",
     "osiedle", "os.", "rondo", "skwer", "bulwar",
 )
+
+
+# ── Polish PERSON detector (Phase 2.1a) ─────────────────────────────────
+# Dwa warianty regex dla polskich imion+nazwisk w formach odmienionych:
+#   Wariant A: IMIĘ_DOWOLNE + NAZWISKO_MIANOWNIK (np. "Anną Nowak")
+#   Wariant B: IMIĘ_DOWOLNE + NAZWISKO_Z_KOŃCÓWKĄ (np. "Pawłem Górskim")
+#
+# Oba wymagają że pierwszy token jest w `PL_ALL_FIRST_NAMES` (whitelist gating
+# w funkcji, nie w regex). Drugi token to capital word z opcjonalną fleksyjną
+# końcówką (B) lub wymóg min 2 lowercase letters (A żeby uniknąć "Anna A").
+#
+# Hyphenated surnames ("Górski-Kowalski") obsługiwane od razu w obu wariantach.
+
+_FIRST_NAME_CANDIDATE = r"[A-ZŁŚŻŹĆŃĄĘÓ][a-ząęółśżźćń]+"
+
+# Sortuj suffixy longest-first żeby greedy regex łapał dłuższe końcówki najpierw.
+# `PL_LAST_NAME_SUFFIXES_INFLECTED` z pii_pl_names jest już posortowany ale
+# robimy explicit dla bezpieczeństwa.
+_LAST_INFLECTED_SUFFIXES_SORTED = sorted(
+    set(PL_LAST_NAME_SUFFIXES_INFLECTED), key=len, reverse=True
+)
+_LAST_INFLECTED_ALT = "|".join(re.escape(s) for s in _LAST_INFLECTED_SUFFIXES_SORTED)
+
+_LAST_NAME_INFLECTED_PATTERN = (
+    rf"[A-ZŁŚŻŹĆŃĄĘÓ][a-ząęółśżźćń]+(?:{_LAST_INFLECTED_ALT})"
+    rf"(?:-[A-ZŁŚŻŹĆŃĄĘÓ][a-ząęółśżźćń]+(?:{_LAST_INFLECTED_ALT}))?"
+)
+
+# Lookahead-based wzorce - finditer może znaleźć overlapping matches, więc
+# nawet jeśli pierwsza para tokenów (np. "Pan Jan") jest skipowana przez
+# whitelist gating, druga para ("Jan Górski-Kowalski") wciąż może być znaleziona.
+PL_PERSON_VARIANT_A = re.compile(
+    rf"(?<!\w)(?=({_FIRST_NAME_CANDIDATE})\s+({LAST_NAME_NOMINATIVE_PATTERN})(?!\w))",
+    re.UNICODE,
+)
+PL_PERSON_VARIANT_B = re.compile(
+    rf"(?<!\w)(?=({_FIRST_NAME_CANDIDATE})\s+({_LAST_NAME_INFLECTED_PATTERN})(?!\w))",
+    re.UNICODE,
+)
+
+
+def find_polish_inflected_persons(text: str) -> list[dict]:
+    """
+    Detector polskich imion+nazwisk z whitelist gatingiem + blocklist brandów.
+
+    Łapie (positive):
+      - "Pawłem Górskim" (variant B: imię odmienione + nazwisko z końcówką)
+      - "Anną Nowak" (variant A: imię odmienione + nazwisko mianownik)
+      - "Marek Kowalski" (variant A i B - dedup w merge z OPF)
+      - "Jan Górski-Kowalski" (hyphenated)
+
+    NIE łapie (negative):
+      - "Marketing Garage" (oba w ORG_BRAND_TOKENS, plus pierwszy nie w whitelist)
+      - "Sheriff Octopus" (oba w ORG_BRAND_TOKENS)
+      - "Open Source" (Open w ORG_BRAND_TOKENS)
+      - "Xavier Martínez" (Xavier nie w PL_ALL_FIRST_NAMES whitelist)
+      - "kanał Marketing Garage" (kontekst trigger "kanał" przed)
+
+    Returns:
+        Lista span dictów w formacie kompatybilnym z OPF detected_spans.
+        Każdy span ma source="regex_pl_inflected" + variant ("A"/"B").
+    """
+    spans: list[dict] = []
+    seen_ranges: set[tuple[int, int]] = set()
+
+    # B preferowany - nazwisko z końcówką = pewniejsze. Iteruj A po B żeby
+    # przy tym samym rangu zostawać przy variant B (większa pewność).
+    for pattern, variant_label in [
+        (PL_PERSON_VARIANT_B, "B"),
+        (PL_PERSON_VARIANT_A, "A"),
+    ]:
+        for m in pattern.finditer(text):
+            first, last = m.group(1), m.group(2)
+            # Lookahead pattern - m.start()=m.end()=position startu pierwszego
+            # capture. Realne pozycje przez group indices.
+            start, end = m.start(1), m.end(2)
+
+            # Dedup A/B na tym samym rangu
+            if (start, end) in seen_ranges:
+                continue
+
+            # Whitelist gating: pierwszy token musi być rozpoznawalnym imieniem
+            # (mianownik LUB jedna z odmian).
+            if first not in PL_ALL_FIRST_NAMES:
+                continue
+
+            # Blocklist: jeśli pierwszy LUB drugi token to brand → skip.
+            # Dla hyphenated surname sprawdzamy tylko pierwszą część.
+            last_first_part = last.split("-")[0]
+            if first in ORG_BRAND_TOKENS or last_first_part in ORG_BRAND_TOKENS:
+                continue
+
+            # Context trigger: czy bezpośrednio przed (30 znaków) jest słowo
+            # z ORG_CONTEXT_TRIGGERS_BEFORE jak "kanał", "firma", "startup".
+            prefix_window = text[max(0, start - 30):start].lower()
+            # Sprawdź jako word boundary żeby uniknąć false trigger w środku słowa.
+            has_org_trigger = any(
+                re.search(rf"\b{re.escape(t)}\b", prefix_window)
+                for t in ORG_CONTEXT_TRIGGERS_BEFORE
+            )
+            if has_org_trigger:
+                continue
+
+            seen_ranges.add((start, end))
+            spans.append({
+                "label": "private_person",
+                "start": start,
+                "end": end,
+                "text": text[start:end],  # lookahead pattern - m.group(0) = ""
+                "placeholder": "<OSOBA>",  # będzie zrenumerowany w pii_service
+                "source": "regex_pl_inflected",
+                "variant": variant_label,
+                "confidence": 0.75 if variant_label == "B" else 0.65,
+            })
+
+    spans.sort(key=lambda s: s["start"])
+    return spans
 
 
 def find_pii(text: str) -> list[RegexSpan]:
@@ -214,23 +345,51 @@ def filter_false_person_spans(opf_spans: list[dict]) -> list[dict]:
     return filtered
 
 
+# ── Source priority dla overlap resolution (Phase 2.1a) ─────────────────
+# Wyższa wartość = wygrywa overlap. Jawnie zamiast polegać na kolejności listy
+# (Codex P0/6: hidden dependency).
+#
+# Logika:
+# - regex (NIP/IBAN/PESEL/postal/address) - deterministic, wysokie zaufanie
+# - opf - model NER, dobry recall ale czasem mismatch
+# - regex_pl_inflected - heurystyka, niższe zaufanie niż OPF dla PERSON
+SOURCE_PRIORITY = {
+    "regex:iban_pl": 100,
+    "regex:nip_pl": 100,
+    "regex:pesel_pl": 100,
+    "regex:postal_pl": 95,
+    "regex:address_pl": 95,
+    "opf": 90,
+    "regex_pl_inflected": 50,  # heurystyka - OPF wygrywa overlap
+}
+
+
+def _source_priority(source: str) -> int:
+    """Lookup priority dla danego source string. Default 0 dla nieznanych."""
+    return SOURCE_PRIORITY.get(source, 0)
+
+
 def merge_with_opf_spans(opf_spans: list[dict], regex_spans: list[RegexSpan]) -> list[dict]:
     """
-    Połącz spany z OPF z regex'em. Deduplikuje overlap (regex wygrywa
-    dla strukturalnych PII bo jest deterministic).
+    Połącz spany z OPF + regex_pl_inflected (oba w opf_spans) z regex strukturalnym.
+
+    Overlap resolution po explicit SOURCE_PRIORITY zamiast kolejności listy.
+    Regex strukturalny (NIP/IBAN/PESEL/address) wygrywa nad OPF i regex_pl,
+    OPF wygrywa nad regex_pl_inflected dla PERSON.
 
     Args:
-        opf_spans: lista span dict'ów z RedactionResult.detected_spans
-        regex_spans: lista RegexSpan z find_pii()
+        opf_spans: lista span dict'ów z OPF (po filter_false_person_spans
+                   i reclassify_address_persons), MOŻE też zawierać
+                   regex_pl_inflected spany (zmergowane wcześniej w pii_service).
+        regex_spans: lista RegexSpan z find_pii() (NIP, IBAN, PESEL, postal, address).
 
     Returns:
-        Połączona lista, sortowana po pozycji.
+        Połączona lista dictów, sortowana po pozycji. Overlap resolved po priority.
     """
-    merged = []
-
-    # Najpierw dodaj wszystkie regex spany (priority)
+    # Konwertuj regex_spans na dict format
+    all_candidates: list[dict] = []
     for r in regex_spans:
-        merged.append({
+        all_candidates.append({
             "label": r.label,
             "start": r.start,
             "end": r.end,
@@ -238,16 +397,34 @@ def merge_with_opf_spans(opf_spans: list[dict], regex_spans: list[RegexSpan]) ->
             "placeholder": r.placeholder,
             "source": r.source,
         })
-
-    # Dodaj OPF spany które NIE overlapują z regex
+    # OPF spans (które mogą zawierać regex_pl_inflected zmergowane wcześniej)
     for opf in opf_spans:
-        overlap = False
-        for r in regex_spans:
-            if not (opf["end"] <= r.start or opf["start"] >= r.end):
-                overlap = True
-                break
-        if not overlap:
-            merged.append({**opf, "source": "opf"})
+        all_candidates.append({**opf, "source": opf.get("source", "opf")})
+
+    # Sortuj po (start, -priority) - przy tym samym start, wyższy priority pierwszy.
+    all_candidates.sort(key=lambda s: (s["start"], -_source_priority(s.get("source", ""))))
+
+    # Greedy dedup: dla każdego kandydata sprawdź czy overlapuje z którymś już
+    # przyjętym. Jeśli tak, przyjmij tylko jeśli ma wyższy priority niż konfliktujący.
+    merged: list[dict] = []
+    for cand in all_candidates:
+        overlapping = [
+            (i, m) for i, m in enumerate(merged)
+            if not (cand["end"] <= m["start"] or cand["start"] >= m["end"])
+        ]
+        if not overlapping:
+            merged.append(cand)
+            continue
+
+        cand_pri = _source_priority(cand.get("source", ""))
+        # Jeśli jakikolwiek overlapping ma >= priority, skip cand
+        if any(_source_priority(m.get("source", "")) >= cand_pri for _, m in overlapping):
+            continue
+
+        # cand wygrywa - usuń wszystkie konfliktujące i dodaj cand
+        keep_idx = {i for i, _ in overlapping}
+        merged = [m for i, m in enumerate(merged) if i not in keep_idx]
+        merged.append(cand)
 
     merged.sort(key=lambda s: s["start"])
     return merged

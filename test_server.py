@@ -328,3 +328,88 @@ def test_alias_helpers_unit():
     assert ps._is_alias_of("Marek Kowalski", "Marek Kowalski") is False
     # Kolejność tokenów ma znaczenie (subsequence != subset)
     assert ps._is_alias_of("Kowalski Marek", "Marek Kowalski") is False
+
+
+# ── Phase 2.1a integration tests — Polish flexion detection ─────────────
+
+
+def test_livestream_pawel_gorski_detection(monkeypatch):
+    """Bug z livestreamu 2026-05-01: 'Pawłem Górskim' miss przez OPF.
+
+    Phase 2.1a: regex_pl_inflected detector łapie. Mock OPF zwraca tylko
+    'Anna Nowak' (mianownik) - OPF nie wykrywa form odmienionych. Po fixie
+    'Pawłem Górskim' powinno być w detections.
+    """
+    # Tekst dokładnie z livestream screena (skrócony do 1 fragmentu)
+    text = (
+        "Cześć, tu Anna Nowak z kanału Marketing Garage. "
+        "Rozmawiam z Pawłem Górskim, founderem startupu Brandbox."
+    )
+
+    # Pre-compute pozycji "Anna Nowak" w tekście dla mock spanu
+    anna_start = text.index("Anna Nowak")
+    anna_end = anna_start + len("Anna Nowak")
+    fake_opf_spans = [
+        {
+            "label": "private_person",
+            "start": anna_start,
+            "end": anna_end,
+            "text": "Anna Nowak",
+            "placeholder": "<P>",
+            "confidence": 0.9,
+        },
+    ]
+    pii_service = _mock_opf_with_spans(monkeypatch, fake_opf_spans)
+    result = pii_service.redact_text(text)
+
+    osoba_texts = [d["text"] for d in result["detections"] if d["label"] == "OSOBA"]
+    assert "Anna Nowak" in osoba_texts, f"Anna Nowak miss. Got: {osoba_texts}"
+    assert "Pawłem Górskim" in osoba_texts, (
+        f"Pawłem Górskim NOT detected (Phase 2.1a regex_pl bug). Got: {osoba_texts}"
+    )
+
+    # Marketing Garage NIE jako OSOBA (blocklist)
+    all_texts = [d["text"] for d in result["detections"]]
+    assert "Marketing Garage" not in all_texts, (
+        "Marketing Garage łapane jako PII (blocklist failure)"
+    )
+
+    # Brandbox NIE jako OSOBA (blocklist + context trigger 'startupu')
+    assert "Brandbox" not in osoba_texts
+
+
+def test_livestream_no_false_positives_brands(monkeypatch):
+    """Phase 2.1a blocklist: brand tokens ('Sheriff Octopus', 'Marketing Garage',
+    'Open Source') NIE łapane jako PERSON nawet gdy OPF nic nie zwraca."""
+    pii_service = _mock_opf_with_spans(monkeypatch, [])
+    text = (
+        "Sheriff Octopus to nasza maskotka. "
+        "Marketing Garage to nazwa kanału. "
+        "Open Source software jest super."
+    )
+    result = pii_service.redact_text(text)
+    osoba_texts = [d["text"] for d in result["detections"] if d["label"] == "OSOBA"]
+    assert osoba_texts == [], f"Brands łapane jako OSOBA: {osoba_texts}"
+
+
+def test_phase2_1a_priority_opf_wins_overlap(monkeypatch):
+    """OPF ma wyższy priority niż regex_pl_inflected. Gdy oba łapią tę samą
+    osobę (np. 'Marek Kowalski' mianownik), OPF wygrywa - regex_pl
+    duplikat odrzucany przez merge_with_opf_spans."""
+    text = "Marek Kowalski przyszedł"
+    fake_opf_spans = [
+        {
+            "label": "private_person",
+            "start": 0,
+            "end": 14,
+            "text": "Marek Kowalski",
+            "placeholder": "<P>",
+            "confidence": 0.95,
+        },
+    ]
+    pii_service = _mock_opf_with_spans(monkeypatch, fake_opf_spans)
+    result = pii_service.redact_text(text)
+    osoby = [d for d in result["detections"] if d["label"] == "OSOBA"]
+    # Tylko 1 detection (OPF), nie 2 (OPF + regex_pl duplikat)
+    assert len(osoby) == 1, f"Duplicate detection. Got: {osoby}"
+    assert osoby[0]["source"] == "model"  # OPF wygrał, nie regex
